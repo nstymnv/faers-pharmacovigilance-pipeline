@@ -3,4 +3,4 @@
 
 ### Pharmacovigilance teams in the private companies or the government need to monitor adverse events reports to identify potential drug safety hazzards and effectively investigate separate cases.
 
-### Project description is in progress...
+### Project description is in progress..
