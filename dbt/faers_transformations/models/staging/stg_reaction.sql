@@ -11,7 +11,7 @@ normalized as(
 	select 
 	safetyreportid as report_id,
 	version,
-	reaction as reaction,
+	INITCAP(TRIM(cast(reaction as string))) as reaction,
 	try_cast(meddra_version as float) as meddra_version,
 	try_cast(outcome as int) as outcome
 	from source
@@ -37,7 +37,13 @@ standardized as (
 ),
 
 final as (
-	select * from standardized
+	select 
+	s.*,
+	c_reac.custom_group as custom_reaction_group,
+	c_reac.custom_group_label as custom_reaction_group_label
+	from standardized s
+	left join {{ ref('custom_reaction_groups_mapping') }} c_reac
+	on s.reaction = c_reac.reaction_normalized
 )
 
 select * from final
