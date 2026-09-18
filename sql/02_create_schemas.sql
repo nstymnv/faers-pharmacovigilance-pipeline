@@ -1,3 +1,7 @@
+-- Without USE DATABASE these schemas land in whatever database happens to be
+-- current for the session, which is rarely FAERS_DB.
+USE DATABASE FAERS_DB;
+
 CREATE SCHEMA IF NOT EXISTS EXTRACTION;
 CREATE SCHEMA IF NOT EXISTS RAW;
 CREATE SCHEMA IF NOT EXISTS STAGING;

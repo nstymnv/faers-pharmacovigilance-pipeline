@@ -40,15 +40,19 @@ def extract_demographics(df: DataFrame) -> DataFrame:
 
 
 def extract_drug(df: DataFrame) -> DataFrame:
+    # drug_index identifies a drug within its report. It is derived rather than a
+    # FAERS field, and it is what keeps two drug entries with identical values
+    # from being treated as the same drug further down.
     df_drug_exploded = df.select(
         col("safetyreportid"),
         col("safetyreportversion"),
-        explode_outer(col("patient.drug")).alias("drug"),
+        posexplode_outer(col("patient.drug")).alias("drug_index", "drug"),
     )
 
     df_drug_flat = df_drug_exploded.select(
         col("safetyreportid"),
         col("safetyreportversion"),
+        col("drug_index"),
         col("drug.medicinalproduct").alias("medicinalproduct"),
         col("drug.activesubstance.activesubstancename").alias("activesubstancename"),
         col("drug.drugcharacterization").alias("drugcharacterization"),
@@ -76,11 +80,15 @@ def extract_drug(df: DataFrame) -> DataFrame:
     # Exploding drugrecurrence fans out one row per recurrence event for the
     # same drug. Collapse back to one row per drug, keeping the last recurrence
     # entry that has a valid (non-null) recurrence action.
-    drug_key = [
-        c for c in df_recurrence_exploded.columns
-        if c not in ("recurrence_index", "drugrecuraction")
-    ]
-    last_valid_recurrence = Window.partitionBy(*drug_key).orderBy(
+    #
+    # Partitioning on the report/drug identity rather than on every column is
+    # what preserves duplicate-looking drug entries: a report can legitimately
+    # list the same product twice with identical fields.
+    last_valid_recurrence = Window.partitionBy(
+        col("safetyreportid"),
+        col("safetyreportversion"),
+        col("drug_index"),
+    ).orderBy(
         col("drugrecuraction").isNull().asc(),
         col("recurrence_index").desc(),
     )

@@ -1,0 +1,4 @@
+# dbt transformations. Kept separate from the ingestion runtime so the two can be
+# installed independently (the Airflow image installs both, CI installs only this).
+dbt-core==1.12.0
+dbt-snowflake==1.12.0

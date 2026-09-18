@@ -1,0 +1,513 @@
+{
+  "type": "struct",
+  "fields": [
+    {
+      "name": "authoritynumb",
+      "type": "string",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "companynumb",
+      "type": "string",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "duplicate",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "fulfillexpeditecriteria",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "occurcountry",
+      "type": "string",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "patient",
+      "type": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "drug",
+            "type": {
+              "type": "array",
+              "elementType": {
+                "type": "struct",
+                "fields": [
+                  {
+                    "name": "actiondrug",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "activesubstance",
+                    "type": {
+                      "type": "struct",
+                      "fields": [
+                        {
+                          "name": "activesubstancename",
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {}
+                        }
+                      ]
+                    },
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugadditional",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugadministrationroute",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugauthorizationnumb",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugbatchnumb",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugcharacterization",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugcumulativedosagenumb",
+                    "type": "double",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugcumulativedosageunit",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugdosageform",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugdosagetext",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugenddate",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugenddateformat",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugindication",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugintervaldosagedefinition",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugintervaldosageunitnumb",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugrecurreadministration",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugrecurrence",
+                    "type": {
+                      "type": "array",
+                      "elementType": {
+                        "type": "struct",
+                        "fields": [
+                          {
+                            "name": "drugrecuraction",
+                            "type": "string",
+                            "nullable": true,
+                            "metadata": {}
+                          }
+                        ]
+                      },
+                      "containsNull": true
+                    },
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugseparatedosagenumb",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugstartdate",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugstartdateformat",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugstructuredosagenumb",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugstructuredosageunit",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugtreatmentduration",
+                    "type": "double",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "drugtreatmentdurationunit",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "medicinalproduct",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  }
+                ]
+              },
+              "containsNull": true
+            },
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "patientagegroup",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "patientonsetage",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "patientonsetageunit",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "patientsex",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "patientweight",
+            "type": "double",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "reaction",
+            "type": {
+              "type": "array",
+              "elementType": {
+                "type": "struct",
+                "fields": [
+                  {
+                    "name": "reactionmeddrapt",
+                    "type": "string",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "reactionmeddraversionpt",
+                    "type": "double",
+                    "nullable": true,
+                    "metadata": {}
+                  },
+                  {
+                    "name": "reactionoutcome",
+                    "type": "long",
+                    "nullable": true,
+                    "metadata": {}
+                  }
+                ]
+              },
+              "containsNull": true
+            },
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "summary",
+            "type": {
+              "type": "struct",
+              "fields": [
+                {
+                  "name": "narrativeincludeclinical",
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {}
+                }
+              ]
+            },
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "primarysource",
+      "type": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "literaturereference",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "qualification",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "reportercountry",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "primarysourcecountry",
+      "type": "string",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "receiptdate",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "receiptdateformat",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "receivedate",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "receivedateformat",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "receiver",
+      "type": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "receiverorganization",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "receivertype",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "reportduplicate",
+      "type": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "duplicatenumb",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "duplicatesource",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "reporttype",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "safetyreportid",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "safetyreportversion",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "sender",
+      "type": {
+        "type": "struct",
+        "fields": [
+          {
+            "name": "senderorganization",
+            "type": "string",
+            "nullable": true,
+            "metadata": {}
+          },
+          {
+            "name": "sendertype",
+            "type": "long",
+            "nullable": true,
+            "metadata": {}
+          }
+        ]
+      },
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "serious",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "seriousnesscongenitalanomali",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "seriousnessdeath",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "seriousnessdisabling",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "seriousnesshospitalization",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "seriousnesslifethreatening",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "seriousnessother",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "transmissiondate",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    },
+    {
+      "name": "transmissiondateformat",
+      "type": "long",
+      "nullable": true,
+      "metadata": {}
+    }
+  ]
+}
