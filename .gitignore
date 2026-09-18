@@ -43,6 +43,9 @@ Thumbs.db
 .env
 .env.*
 
+# Keep the committed template
+!.env.example
+
 # ==================================================
 # DATA FILES
 # ==================================================
@@ -135,5 +138,8 @@ jars/
 # CLAUDE
 # ==================================================
 CLAUDE.md
-docs/refactoring-report.md
-docs/dbt-sql-refactoring-plan.md
+
+# ==================================================
+# DOCS (local-only working notes)
+# ==================================================
+docs/
