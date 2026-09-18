@@ -1,30 +1,23 @@
-{{ config(
-    materialized='table',
-    schema='intermediate'
-) }}
+-- Grain: one row per (report_id, reaction, meddra_version) — i.e. one row
+-- per distinct reaction on a report, deduplicated across versions.
+--
+-- Unlike reports/demographics, a reaction record isn't expected to gain new
+-- non-null fields across versions independently, so the latest version's row
+-- is taken as-is instead of merging fields with max_by.
+with ranked_versions as (
 
-WITH ranked_versions AS (
+    select *
+    from {{ ref('stg_reaction') }}
 
-    SELECT *
-    FROM {{ ref('stg_reaction') }}
-
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY
+    qualify row_number() over (
+        partition by
             report_id,
             reaction,
             meddra_version
-        ORDER BY version DESC
+        order by version desc
     ) = 1
-
-),
-
-deduplicated AS (
-
-    SELECT *
-
-    FROM ranked_versions
 
 )
 
-SELECT *
-FROM deduplicated
+select *
+from ranked_versions

@@ -136,3 +136,4 @@ jars/
 # ==================================================
 CLAUDE.md
 docs/refactoring-report.md
+docs/dbt-sql-refactoring-plan.md

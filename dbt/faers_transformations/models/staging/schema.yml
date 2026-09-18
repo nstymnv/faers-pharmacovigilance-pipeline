@@ -1,0 +1,219 @@
+version: 2
+
+models:
+  - name: stg_demographics
+    description: "Model for cleaning and transforming the FAERS demographics data"
+    columns:
+      - name: report_id
+        description: "FAERS safety report identifier. Anchors joins to the other staging models; not unique on its own since a report can have multiple versions (see version)."
+        data_tests:
+          - not_null
+      - name: version
+        description: "FAERS report version number (safetyreportversion). Multiple versions of the same report_id are consolidated in int_demographics."
+      - name: age_group
+        description: "Decoded patient age group: one of neonate, infant, child, adolescent, adult, elderly (from the FAERS patientagegroup code 1-6)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["neonate", "infant", "child", "adolescent", "adult", "elderly"]
+              config:
+                severity: warn
+      - name: onset_age
+        description: "The age of the patient at the time of the adverse event"
+      - name: age_unit
+        description: "Unit for onset_age (e.g. year, month, day), decoded from the FAERS patientonsetageunit code via the time_unit_code_mapping seed."
+      - name: sex
+        description: "Decoded patient sex: male, female, or unknown (from the FAERS patientsex code 0/1/2; unmapped codes also fall back to unknown)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["male", "female", "unknown"]
+              config:
+                severity: warn
+      - name: weight_kg
+        description: "Patient weight in kilograms (FAERS patientweight)."
+
+  - name: stg_drugs
+    description: "Model for cleaning and transforming the FAERS drug data"
+    columns:
+      - name: report_id
+        description: "FAERS safety report identifier. Anchors joins to the other staging models; not unique on its own since a report can have multiple versions (see version) and multiple drugs per version."
+        data_tests:
+          - not_null
+      - name: version
+        description: "FAERS report version number (safetyreportversion). Multiple versions of the same drug are consolidated in int_drugs."
+      - name: medicinal_product
+        description: "The name of the medicinal product"
+        data_tests:
+          - not_null
+      - name: active_substance
+        description: "The active substance in the medicinal product"
+        data_tests:
+          - not_null
+      - name: drug_characterization
+        description: "The characterization of the drug (e.g., suspect, concomitant)"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["suspect", "concomitant", "interacting"]
+              config:
+                severity: warn
+      - name: drug_indication
+        description: "The condition the drug was indicated for, as reported (FAERS drugindication)."
+      - name: drug_batch_number
+        description: "Manufacturer batch/lot number for the drug (FAERS drugbatchnumb)."
+      - name: drug_authorization_number
+        description: "Marketing authorization number for the drug (FAERS drugauthorizationnumb)."
+      - name: administration_route
+        description: "Route of administration (e.g. oral, intravenous), decoded from the FAERS drugadministrationroute code via the administration_route_mapping seed."
+      - name: dosage_amount
+        description: "Numeric dose amount as reported (FAERS drugstructuredosagenumb)."
+      - name: dosage_unit
+        description: "Decoded unit for dosage_amount: kg, G, Mg, or µg (from the FAERS drugstructuredosageunit code 001-004)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["kg", "G", "Mg", "µg"]
+              config:
+                severity: warn
+      - name: start_date
+        description: "Date the drug treatment started. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped."
+      - name: end_date
+        description: "Date the drug treatment ended. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped."
+      - name: duration
+        description: "Reported treatment duration (FAERS drugtreatmentduration), in the unit given by duration_unit."
+      - name: duration_unit
+        description: "Unit for duration (e.g. day, week), decoded from the FAERS drugtreatmentdurationunit code via the time_unit_code_mapping seed."
+      - name: drug_recurrence
+        description: >
+          Whether the adverse event recurred when this drug was re-administered:
+          yes, no, or unknown (from the FAERS drugrecurreadministration code 1-3).
+          Distinct from recurrence_action, which is the action code from that
+          recurrence event rather than whether recurrence happened at all.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["yes", "no", "unknown"]
+              config:
+                severity: warn
+      - name: recurrence_action
+        description: >
+          Action-code (drugrecuraction) associated with a recurrence-administration
+          event for this drug, passed through unmapped. Distinct from
+          drug_recurrence: this is the outcome of a specific recurrence event, not
+          whether recurrence was reported at all. parser.py collapses the FAERS
+          drugrecurrence array (which can have multiple entries per drug) down to
+          one row per drug by keeping the last entry with a non-null value here.
+      - name: taken_action
+        description: "Action taken with the drug in response to the adverse event (FAERS actiondrug code, passed through unmapped)."
+      - name: use_stopped_reduced
+        description: "Whether use of the drug was stopped or reduced: yes, no, or \"doesn't Apply\" (from the FAERS drugadditional code 1-3)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["yes", "no", "doesn't Apply"]
+              config:
+                severity: warn
+
+  - name: stg_reaction
+    description: "Model for cleaning and transforming the FAERS reaction data"
+    columns:
+      - name: report_id
+        description: "FAERS safety report identifier. Anchors joins to the other staging models; not unique on its own since a report can have multiple versions (see version) and multiple reactions per version."
+        data_tests:
+          - not_null
+      - name: version
+        description: "FAERS report version number (safetyreportversion). Multiple versions of the same reaction are consolidated in int_reactions."
+      - name: reaction
+        description: "The MedDRA preferred term for the reaction"
+        data_tests:
+          - not_null
+      - name: meddra_version
+        description: "MedDRA dictionary version the reaction term was coded against (FAERS reactionmeddraversionpt)."
+      - name: outcome
+        description: "The outcome of the adverse event (e.g., recovered, not recovered)"
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - "recovered/resolved"
+                  - "recovering/resolving"
+                  - "not recovered/not resolved"
+                  - "recovered/resolved with sequelae"
+                  - "fatal"
+                  - "unknown"
+              config:
+                severity: warn
+      - name: custom_reaction_group
+        description: "Internal grouping key for the reaction, from the custom_reaction_groups_mapping seed (a project-defined MedDRA-derived grouping, not a FAERS field)."
+      - name: custom_reaction_group_label
+        description: "Human-readable label for custom_reaction_group, from the custom_reaction_groups_mapping seed."
+
+  - name: stg_reports
+    description: "Model for cleaning and transforming the FAERS reports data"
+    columns:
+      - name: report_id
+        description: "FAERS safety report identifier. Anchors joins to the other staging models; not unique on its own since a report can have multiple versions (see version)."
+        data_tests:
+          - not_null
+      - name: version
+        description: "FAERS report version number (safetyreportversion). Multiple versions of the same report_id are consolidated in int_reports."
+      - name: receipt_date
+        description: "The date the report was received. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped."
+        data_tests:
+          - not_null
+      - name: transmission_date
+        description: "The date the report was transmitted. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped."
+        data_tests:
+          - not_null
+      - name: source_country
+        description: "The country from which the report originated"
+        data_tests:
+          - not_null
+      - name: occurrence_country
+        description: "The country where the adverse event occurred"
+        data_tests:
+          - not_null
+      - name: report_type
+        description: "FAERS report type code (reporttype), passed through unmapped."
+      - name: serious
+        description: "Indicates whether the adverse event was serious"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["yes", "no"]
+              config:
+                severity: warn
+      - name: congenital_anomaly
+        description: "Flag indicating the adverse event involved a congenital anomaly (FAERS seriousnesscongenitalanomali)."
+      - name: death
+        description: "Flag indicating the adverse event resulted in death (FAERS seriousnessdeath)."
+      - name: disabling
+        description: "Flag indicating the adverse event was disabling (FAERS seriousnessdisabling)."
+      - name: hospitalization
+        description: "Flag indicating the adverse event required hospitalization (FAERS seriousnesshospitalization)."
+      - name: lifethreatening
+        description: "Flag indicating the adverse event was life-threatening (FAERS seriousnesslifethreatening)."
+      - name: other_serious
+        description: "Flag indicating another, otherwise-uncategorized seriousness criterion applied (FAERS seriousnessother)."
+      - name: fulfill_expedite_criteria
+        description: "Indicates whether the report fulfills expedite criteria"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["identified", "other"]
+              config:
+                severity: warn
+      - name: duplicate_flag
+        description: "Flag indicating this report was marked as a duplicate of another (FAERS duplicate)."
+      - name: duplicate_numb
+        description: "Report number of the report this one duplicates, if duplicate_flag is set (FAERS duplicatenumb)."
+      - name: duplicate_source
+        description: "Source of the duplicate report reference (FAERS duplicatesource)."
+      - name: authority_number
+        description: "Regulatory authority's case number for the report (FAERS authoritynumb)."
+      - name: company_number
+        description: "Reporting company's internal case number for the report (FAERS companynumb)."
