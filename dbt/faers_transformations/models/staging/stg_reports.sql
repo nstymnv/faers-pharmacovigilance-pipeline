@@ -10,26 +10,26 @@ with source as (
 normalized as(
 	select
 	safetyreportid as report_id,
-	version,
+	safetyreportversion as version,
 	try_to_date(to_varchar(receiptdate), 'YYYYMMDD') as receipt_date,
 	try_to_date(to_varchar(transmissiondate), 'YYYYMMDD') as transmission_date,
-	country as source_country,
+	primarysourcecountry as source_country,
 	occurcountry as occurrence_country,
 	reporttype as report_type,
 	try_cast(serious as int) as serious,
-	try_cast(congenital_anomaly as int) as congenital_anomaly,
-	try_cast(death as int) as death,
-	try_cast(disabling as int) as disabling,
-	try_cast(hospitalization as int) as hospitalization,
-	try_cast(lifethreatening as int) as lifethreatening,
-	try_cast(other_serious as int) as other_serious,
+	try_cast(seriousnesscongenitalanomali as int) as congenital_anomaly,
+	try_cast(seriousnessdeath as int) as death,
+	try_cast(seriousnessdisabling as int) as disabling,
+	try_cast(seriousnesshospitalization as int) as hospitalization,
+	try_cast(seriousnesslifethreatening as int) as lifethreatening,
+	try_cast(seriousnessother as int) as other_serious,
 	try_cast(fulfillexpeditecriteria as int) as fulfill_expedite_criteria,
 	try_cast(duplicate as int) as duplicate_flag,
-	duplicate_numb,
-	duplicate_source,
+	duplicatenumb as duplicate_numb,
+	duplicatesource as duplicate_source,
 	authoritynumb as authority_number,
 	companynumb as company_number
-from source 
+from source
 where safetyreportid is not null
 	  and serious is not null
 ),

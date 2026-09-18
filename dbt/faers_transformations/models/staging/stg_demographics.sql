@@ -9,14 +9,14 @@ with source as (
 ),
 
 normalized as (
-	select 
+	select
 		safetyreportid as report_id,
-		version,
-		try_cast(age_group as int) as age_group,
-		try_cast(onset_age as int) as onset_age,
-		try_cast(onset_age_unit as int) as age_unit_code,
-		try_cast(sex as int) as sex,
-		try_cast(weight as float) as weight_kg
+		safetyreportversion as version,
+		try_cast(patientagegroup as int) as age_group,
+		try_cast(patientonsetage as int) as onset_age,
+		try_cast(patientonsetageunit as int) as age_unit_code,
+		try_cast(patientsex as int) as sex,
+		try_cast(patientweight as float) as weight_kg
 	from source
 	where safetyreportid is not null
 ),

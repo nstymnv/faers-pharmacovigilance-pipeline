@@ -8,9 +8,65 @@ sources:
     tables:
       - name: reports
         description: "The FAERS reports table"
+        columns:
+          - name: safetyreportid
+          - name: safetyreportversion
+          - name: receiptdate
+          - name: transmissiondate
+          - name: primarysourcecountry
+          - name: occurcountry
+          - name: reporttype
+          - name: serious
+          - name: seriousnesscongenitalanomali
+          - name: seriousnessdeath
+          - name: seriousnessdisabling
+          - name: seriousnesshospitalization
+          - name: seriousnesslifethreatening
+          - name: seriousnessother
+          - name: fulfillexpeditecriteria
+          - name: duplicate
+          - name: duplicatenumb
+          - name: duplicatesource
+          - name: authoritynumb
+          - name: companynumb
       - name: demographics
         description: "The patients' demographic data table"
+        columns:
+          - name: safetyreportid
+          - name: safetyreportversion
+          - name: patientagegroup
+          - name: patientonsetage
+          - name: patientonsetageunit
+          - name: patientsex
+          - name: patientweight
       - name: drug
         description: "The complete medication information table"
+        columns:
+          - name: safetyreportid
+          - name: safetyreportversion
+          - name: medicinalproduct
+          - name: activesubstancename
+          - name: drugcharacterization
+          - name: drugindication
+          - name: drugbatchnumb
+          - name: drugauthorizationnumb
+          - name: drugadministrationroute
+          - name: drugstructuredosagenumb
+          - name: drugstructuredosageunit
+          - name: drugstartdate
+          - name: drugenddate
+          - name: drugtreatmentduration
+          - name: drugtreatmentdurationunit
+          - name: drugrecurreadministration
+          - name: drugrecuraction
+            description: "Recurrence-action code for this drug: the drugrecurrence array is exploded and collapsed back to the last valid (non-null) entry per drug"
+          - name: actiondrug
+          - name: drugadditional
       - name: reaction
         description: "The patients' reaction data table"
+        columns:
+          - name: safetyreportid
+          - name: safetyreportversion
+          - name: reactionmeddrapt
+          - name: reactionmeddraversionpt
+          - name: reactionoutcome

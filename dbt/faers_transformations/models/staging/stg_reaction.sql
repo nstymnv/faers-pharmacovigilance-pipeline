@@ -8,15 +8,15 @@ with source as (
 ),
 
 normalized as(
-	select 
+	select
 	safetyreportid as report_id,
-	version,
-	INITCAP(TRIM(cast(reaction as string))) as reaction,
-	try_cast(meddra_version as float) as meddra_version,
-	try_cast(outcome as int) as outcome
+	safetyreportversion as version,
+	INITCAP(TRIM(cast(reactionmeddrapt as string))) as reaction,
+	try_cast(reactionmeddraversionpt as float) as meddra_version,
+	try_cast(reactionoutcome as int) as outcome
 	from source
-	where report_id is not null
-		  and reaction is not null
+	where safetyreportid is not null
+		  and reactionmeddrapt is not null
 ),
 
 standardized as (

@@ -8,31 +8,33 @@ with source as (
 ),
 
 normalized as (
-	select 
+	select
 	safetyreportid as report_id,
-	version,
+	safetyreportversion as version,
 	UPPER(TRIM(medicinalproduct)) as medicinal_product,
-	UPPER(TRIM(active_substance)) as active_substance,
+	UPPER(TRIM(activesubstancename)) as active_substance,
 	CAST(drugcharacterization as int) as drug_characterization,
 	drugindication as drug_indication,
 	drugbatchnumb as drug_batch_number,
 	drugauthorizationnumb as drug_authorization_number,
-	CAST(administration_route as string) as administration_route,
-	dosage_amount as dosage_amount,
-	CAST(dosage_unit as string) as dosage_unit,
-	try_to_date(to_varchar(start_date), 'YYYYMMDD') as start_date,
-	try_to_date(to_varchar(end_date), 'YYYYMMDD') as end_date,
-	try_cast(duration as float) as duration,
-	cast(duration_unit as int) as duration_unit,
+	CAST(drugadministrationroute as string) as administration_route,
+	drugstructuredosagenumb as dosage_amount,
+	CAST(drugstructuredosageunit as string) as dosage_unit,
+	try_to_date(to_varchar(drugstartdate), 'YYYYMMDD') as start_date,
+	try_to_date(to_varchar(drugenddate), 'YYYYMMDD') as end_date,
+	try_cast(drugtreatmentduration as float) as duration,
+	cast(drugtreatmentdurationunit as int) as duration_unit,
 	cast(drugrecurreadministration as int) as drug_recurrence,
-	recurrence_action as recurrence_action,
+	-- last valid (non-null) recurrence-action code for this drug; parser.py
+	-- collapses the drugrecurrence explosion back to one row per drug
+	drugrecuraction as recurrence_action,
 	cast(actiondrug as int) as taken_action,
 	cast(drugadditional as int) as use_stopped_reduced
-	
+
 from source
 where safetyreportid is not null
 	  and medicinalproduct is not null
-	  and active_substance is not null
+	  and activesubstancename is not null
 	  and drugcharacterization is not null
 
 ),
