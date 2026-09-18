@@ -1,56 +1,53 @@
-{{ config(
-    materialized='table',
-    schema='intermediate'
-) }}
+-- Grain: one row per report_id — versions are consolidated by merging the
+-- latest non-null value per field (see the max_by pattern below).
+with ranked_versions as (
 
-WITH ranked_versions AS (
+    select *
+    from {{ ref('stg_demographics') }}
 
-    SELECT *
-    FROM {{ ref('stg_demographics') }}
-
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY report_id, version
-        ORDER BY version DESC
+    qualify row_number() over (
+        partition by report_id, version
+        order by version desc
     ) = 1
 
 ),
 
-deduplicated AS (
+deduplicated as (
 
-    SELECT
+    select
         report_id,
-        MAX(version) AS version,
+        max(version) as version,
 
-        MAX_BY(
+        max_by(
             age_group,
-            IFF(age_group IS NOT NULL, version, NULL)
-        ) AS age_group,
+            iff(age_group is not null, version, null)
+        ) as age_group,
 
-        MAX_BY(
+        max_by(
             onset_age,
-            IFF(onset_age IS NOT NULL, version, NULL)
-        ) AS onset_age,
+            iff(onset_age is not null, version, null)
+        ) as onset_age,
 
-        MAX_BY(
+        max_by(
             age_unit,
-            IFF(age_unit IS NOT NULL, version, NULL)
-        ) AS age_unit,
+            iff(age_unit is not null, version, null)
+        ) as age_unit,
 
-        MAX_BY(
+        max_by(
             sex,
-            IFF(sex IS NOT NULL, version, NULL)
-        ) AS sex,
+            iff(sex is not null, version, null)
+        ) as sex,
 
-        MAX_BY(
+        max_by(
             weight_kg,
-            IFF(weight_kg IS NOT NULL, version, NULL)
-        ) AS weight_kg
+            iff(weight_kg is not null, version, null)
+        ) as weight_kg
 
-    FROM ranked_versions
+    from ranked_versions
 
-    GROUP BY report_id
+    group by report_id
 
 )
 
-SELECT *
-FROM deduplicated
+select *
+from deduplicated

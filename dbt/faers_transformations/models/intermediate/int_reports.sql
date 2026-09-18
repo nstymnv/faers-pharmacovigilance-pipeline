@@ -1,114 +1,111 @@
-{{ config(
-    materialized='table',
-    schema='intermediate'
-) }}
+-- Grain: one row per report_id — versions are consolidated by merging the
+-- latest non-null value per field (see the max_by pattern below).
+with ranked_versions as (
 
-WITH ranked_versions AS (
+    select *
+    from {{ ref('stg_reports') }}
 
-    SELECT *
-    FROM {{ ref('stg_reports') }}
-
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY report_id, version
-        ORDER BY transmission_date DESC
+    qualify row_number() over (
+        partition by report_id, version
+        order by transmission_date desc
     ) = 1
 
 ),
 
-deduplicated AS (
+deduplicated as (
 
-    SELECT
+    select
 
         report_id,
-        MAX(version) AS version,
-        MAX_BY(receipt_date, version) AS receipt_date,
-        MAX_BY(transmission_date, version) AS transmission_date,
-		
-        MAX_BY(
+        max(version) as version,
+        max_by(receipt_date, version) as receipt_date,
+        max_by(transmission_date, version) as transmission_date,
+
+        max_by(
             source_country,
-            IFF(source_country IS NOT NULL, version, NULL)
-        ) AS source_country,
+            iff(source_country is not null, version, null)
+        ) as source_country,
 
-        MAX_BY(
+        max_by(
             occurrence_country,
-            IFF(occurrence_country IS NOT NULL, version, NULL)
-        ) AS occurrence_country,
+            iff(occurrence_country is not null, version, null)
+        ) as occurrence_country,
 
-        MAX_BY(
+        max_by(
             report_type,
-            IFF(report_type IS NOT NULL, version, NULL)
-        ) AS report_type,
+            iff(report_type is not null, version, null)
+        ) as report_type,
 
-        MAX_BY(
+        max_by(
             serious,
-            IFF(serious IS NOT NULL, version, NULL)
-        ) AS serious,
+            iff(serious is not null, version, null)
+        ) as serious,
 
-        MAX_BY(
+        max_by(
             congenital_anomaly,
-            IFF(congenital_anomaly IS NOT NULL, version, NULL)
-        ) AS congenital_anomaly,
+            iff(congenital_anomaly is not null, version, null)
+        ) as congenital_anomaly,
 
-        MAX_BY(
+        max_by(
             death,
-            IFF(death IS NOT NULL, version, NULL)
-        ) AS death,
+            iff(death is not null, version, null)
+        ) as death,
 
-        MAX_BY(
+        max_by(
             disabling,
-            IFF(disabling IS NOT NULL, version, NULL)
-        ) AS disabling,
+            iff(disabling is not null, version, null)
+        ) as disabling,
 
-        MAX_BY(
+        max_by(
             hospitalization,
-            IFF(hospitalization IS NOT NULL, version, NULL)
-        ) AS hospitalization,
+            iff(hospitalization is not null, version, null)
+        ) as hospitalization,
 
-        MAX_BY(
+        max_by(
             lifethreatening,
-            IFF(lifethreatening IS NOT NULL, version, NULL)
-        ) AS lifethreatening,
+            iff(lifethreatening is not null, version, null)
+        ) as lifethreatening,
 
-        MAX_BY(
+        max_by(
             other_serious,
-            IFF(other_serious IS NOT NULL, version, NULL)
-        ) AS other_serious,
+            iff(other_serious is not null, version, null)
+        ) as other_serious,
 
-        MAX_BY(
+        max_by(
             fulfill_expedite_criteria,
-            IFF(fulfill_expedite_criteria IS NOT NULL, version, NULL)
-        ) AS fulfill_expedite_criteria,
+            iff(fulfill_expedite_criteria is not null, version, null)
+        ) as fulfill_expedite_criteria,
 
-        MAX_BY(
+        max_by(
             duplicate_flag,
-            IFF(duplicate_flag IS NOT NULL, version, NULL)
-        ) AS duplicate_flag,
+            iff(duplicate_flag is not null, version, null)
+        ) as duplicate_flag,
 
-        MAX_BY(
+        max_by(
             duplicate_numb,
-            IFF(duplicate_numb IS NOT NULL, version, NULL)
-        ) AS duplicate_numb,
+            iff(duplicate_numb is not null, version, null)
+        ) as duplicate_numb,
 
-        MAX_BY(
+        max_by(
             duplicate_source,
-            IFF(duplicate_source IS NOT NULL, version, NULL)
-        ) AS duplicate_source,
+            iff(duplicate_source is not null, version, null)
+        ) as duplicate_source,
 
-        MAX_BY(
+        max_by(
             authority_number,
-            IFF(authority_number IS NOT NULL, version, NULL)
-        ) AS authority_number,
+            iff(authority_number is not null, version, null)
+        ) as authority_number,
 
-        MAX_BY(
+        max_by(
             company_number,
-            IFF(company_number IS NOT NULL, version, NULL)
-        ) AS company_number
+            iff(company_number is not null, version, null)
+        ) as company_number
 
-    FROM ranked_versions
+    from ranked_versions
 
-    GROUP BY report_id
+    group by report_id
 
 )
 
-SELECT *
-FROM deduplicated
+select *
+from deduplicated

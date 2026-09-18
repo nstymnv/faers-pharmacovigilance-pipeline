@@ -1,0 +1,21 @@
+[sqlfluff]
+templater = dbt
+dialect = snowflake
+# ST06/ST09 reorder select columns / join conditions for style reasons that go
+# beyond this project's formatting convention (casing/spacing/whitespace only)
+# and would otherwise produce noisy, non-cosmetic diffs.
+exclude_rules = structure.column_order, structure.join_condition_order
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = ~/.dbt
+target = dev
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.literals]
+capitalisation_policy = lower

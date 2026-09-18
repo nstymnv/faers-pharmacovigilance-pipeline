@@ -22,8 +22,53 @@ models:
       - name: transmission_date
         description: Date the report was transmitted.
 
+      - name: source_country
+        description: Country from which the report originated, merged across versions.
+
+      - name: occurrence_country
+        description: Country where the adverse event occurred, merged across versions.
+
+      - name: report_type
+        description: FAERS report type code, merged across versions.
+
+      - name: serious
+        description: Whether the adverse event was serious (yes/no), merged across versions.
+
+      - name: congenital_anomaly
+        description: Flag indicating the adverse event involved a congenital anomaly, merged across versions.
+
+      - name: death
+        description: Flag indicating the adverse event resulted in death, merged across versions.
+
+      - name: disabling
+        description: Flag indicating the adverse event was disabling, merged across versions.
+
+      - name: hospitalization
+        description: Flag indicating the adverse event required hospitalization, merged across versions.
+
+      - name: lifethreatening
+        description: Flag indicating the adverse event was life-threatening, merged across versions.
+
+      - name: other_serious
+        description: Flag indicating another, otherwise-uncategorized seriousness criterion applied, merged across versions.
+
+      - name: fulfill_expedite_criteria
+        description: Whether the report fulfills expedite criteria, merged across versions.
+
       - name: duplicate_flag
         description: Indicates whether the report has duplicate/version information.
+
+      - name: duplicate_numb
+        description: Report number of the report this one duplicates, if duplicate_flag is set.
+
+      - name: duplicate_source
+        description: Source of the duplicate report reference.
+
+      - name: authority_number
+        description: Regulatory authority's case number for the report.
+
+      - name: company_number
+        description: Reporting company's internal case number for the report.
 
 
   - name: int_demographics
@@ -37,19 +82,19 @@ models:
           - not_null
 
       - name: age_group
-        description: Standardized patient age group.
+        description: Standardized patient age group, merged across versions.
 
       - name: onset_age
-        description: Patient age at onset of the adverse event.
+        description: Patient age at onset of the adverse event, merged across versions.
 
       - name: age_unit
-        description: Unit used for onset age.
+        description: Unit used for onset age, merged across versions.
 
       - name: sex
-        description: Standardized patient sex.
+        description: Standardized patient sex, merged across versions.
 
       - name: weight_kg
-        description: Patient weight in kilograms.
+        description: Patient weight in kilograms, merged across versions.
 
 
   - name: int_drugs
@@ -63,6 +108,9 @@ models:
         tests:
           - not_null
 
+      - name: version
+        description: FAERS report version this drug record was last seen in (see stg_drugs; not merged across versions — see the model header comment for why).
+
       - name: medicinal_product
         description: Standardized medicinal product name.
 
@@ -74,6 +122,53 @@ models:
 
       - name: drug_indication
         description: Indication for which the drug was used.
+
+      - name: drug_batch_number
+        description: Manufacturer batch/lot number for the drug.
+
+      - name: drug_authorization_number
+        description: Marketing authorization number for the drug.
+
+      - name: administration_route
+        description: Route of administration (e.g. oral, intravenous).
+
+      - name: dosage_amount
+        description: Numeric dose amount as reported.
+
+      - name: dosage_unit
+        description: Unit for dosage_amount (e.g. kg, G, Mg, µg).
+
+      - name: start_date
+        description: Date the drug treatment started.
+
+      - name: end_date
+        description: Date the drug treatment ended.
+
+      - name: duration
+        description: Reported treatment duration, in the unit given by duration_unit.
+
+      - name: duration_unit
+        description: Unit for duration (e.g. day, week).
+
+      - name: drug_recurrence
+        description: >
+          Whether the adverse event recurred when this drug was
+          re-administered (yes/no/unknown). Distinct from recurrence_action,
+          which is the action code from that recurrence event rather than
+          whether recurrence happened at all — see stg_drugs for detail.
+
+      - name: recurrence_action
+        description: >
+          Action-code associated with a recurrence-administration event for
+          this drug. Distinct from drug_recurrence: this is the outcome of a
+          specific recurrence event, not whether recurrence was reported at
+          all — see stg_drugs for detail.
+
+      - name: taken_action
+        description: Action taken with the drug in response to the adverse event.
+
+      - name: use_stopped_reduced
+        description: Whether use of the drug was stopped or reduced (yes/no/"doesn't Apply").
 
 
   - name: int_reactions
@@ -87,6 +182,9 @@ models:
         tests:
           - not_null
 
+      - name: version
+        description: FAERS report version this reaction record was last seen in (see stg_reaction; not merged across versions — see the model header comment for why).
+
       - name: reaction
         description: Reported adverse reaction.
 
@@ -95,3 +193,9 @@ models:
 
       - name: outcome
         description: Standardized outcome of the reported reaction.
+
+      - name: custom_reaction_group
+        description: Internal grouping key for the reaction (project-defined MedDRA-derived grouping, not a FAERS field).
+
+      - name: custom_reaction_group_label
+        description: Human-readable label for custom_reaction_group.

@@ -1,25 +1,27 @@
-{{ config(
-    materialized='table',
-    schema='intermediate'
-) }}
+-- Grain: one row per (report_id, medicinal_product, active_substance,
+-- drug_characterization, drug_indication, drug_authorization_number) — i.e.
+-- one row per distinct drug on a report, deduplicated across versions.
+--
+-- Unlike reports/demographics, a drug record isn't expected to gain new
+-- non-null fields across versions independently, so the latest version's row
+-- is taken as-is instead of merging fields with max_by.
+with ranked_versions as (
 
-WITH ranked_versions AS (
+    select *
+    from {{ ref('stg_drugs') }}
 
-    SELECT *
-    FROM {{ ref('stg_drugs') }}
-
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY
+    qualify row_number() over (
+        partition by
             report_id,
             medicinal_product,
             active_substance,
             drug_characterization,
             drug_indication,
             drug_authorization_number
-        ORDER BY version DESC
+        order by version desc
     ) = 1
 
 )
 
-SELECT *
-FROM ranked_versions
+select *
+from ranked_versions

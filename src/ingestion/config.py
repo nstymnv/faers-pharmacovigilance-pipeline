@@ -1,36 +1,37 @@
-from dotenv import load_dotenv
-from pathlib import Path
 import os
 import re
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 load_dotenv()
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
-POSTGRES_USER = os.getenv("POSTGRES_USER")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-POSTGRES_URL = os.getenv("POSTGRES_URL")
-FAERS_INDEX_URL = (
-    "https://fis.fda.gov/extensions/FPD-QDE-FAERS/FPD-QDE-FAERS.html"
-)
+FAERS_INDEX_URL = "https://fis.fda.gov/extensions/FPD-QDE-FAERS/FPD-QDE-FAERS.html"
 YEARS_TO_DOWNLOAD = 5
-RAW_DATA_DIR = "data/raw"
+RAW_DATA_DIR = REPO_ROOT / "data" / "raw"
 
-private_key = Path(
-    os.getenv("SNOWFLAKE_PRIVATE_KEY_PATH")
-).read_text()
 
-private_key = re.sub(
-    r"-*(BEGIN|END) PRIVATE KEY-*\n",
-    "",
-    private_key
-).replace("\n", "")
+def load_snowflake_private_key(path: str | None) -> str:
+    if not path:
+        raise RuntimeError("SNOWFLAKE_PRIVATE_KEY_PATH is not set")
 
-sf_options = {
-    "sfURL": f"{os.getenv('SNOWFLAKE_ACCOUNT')}.snowflakecomputing.com",
-    "sfUser": os.getenv("SNOWFLAKE_USER"),
-    "pem_private_key": private_key,
-    "sfWarehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
-    "sfDatabase": os.getenv("SNOWFLAKE_DATABASE"),
-    "sfSchema": os.getenv("SNOWFLAKE_SCHEMA"),
-    "sfRole": os.getenv("SNOWFLAKE_ROLE"),
-}
+    key_path = Path(path)
+    if not key_path.is_absolute():
+        key_path = REPO_ROOT / key_path
+
+    private_key = key_path.read_text()
+    return re.sub(r"-*(BEGIN|END) PRIVATE KEY-*\n", "", private_key).replace("\n", "")
+
+
+def build_sf_options() -> dict[str, str | None]:
+    return {
+        "sfURL": f"{os.getenv('SNOWFLAKE_ACCOUNT')}.snowflakecomputing.com",
+        "sfUser": os.getenv("SNOWFLAKE_USER"),
+        "pem_private_key": load_snowflake_private_key(os.getenv("SNOWFLAKE_PRIVATE_KEY_PATH")),
+        "sfWarehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
+        "sfDatabase": os.getenv("SNOWFLAKE_DATABASE"),
+        "sfSchema": os.getenv("SNOWFLAKE_SCHEMA"),
+        "sfRole": os.getenv("SNOWFLAKE_ROLE"),
+    }
