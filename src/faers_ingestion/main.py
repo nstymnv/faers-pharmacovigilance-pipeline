@@ -17,6 +17,7 @@ import snowflake.connector
 from faers_ingestion.config import build_connection_parameters, stage_xml_prefix
 from faers_ingestion.extract.scanner import extract_data
 from faers_ingestion.extract.spark import create_spark
+from faers_ingestion.load.deleted_cases import load_deleted_cases
 from faers_ingestion.load.loader import write_quarter
 from faers_ingestion.load.parser import (
     extract_demographics,
@@ -72,6 +73,13 @@ def load_quarter(spark, year: int, quarter: int) -> dict[str, int]:
 
     raw_data.unpersist()
 
+    # Loaded last, and deliberately so. Replacing this quarter's retracted-case
+    # slice before the report tables would, on a failed XML load, leave new
+    # retractions filtering an older set of reports. The two are not written in
+    # one transaction, so the cheap, re-runnable side goes second.
+    with snowflake.connector.connect(**build_connection_parameters()) as conn:
+        counts["DELETED_CASES"] = load_deleted_cases(conn, year, quarter)
+
     return counts
 
 
@@ -99,12 +107,17 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     spark = create_spark()
-    for year, quarter in args.quarters:
-        if args.ingest:
-            ingest_quarter(year, quarter, args.force)
+    try:
+        for year, quarter in args.quarters:
+            if args.ingest:
+                ingest_quarter(year, quarter, args.force)
 
-        counts = load_quarter(spark, year, quarter)
-        logger.info("%sq%s loaded: %s", year, quarter, counts)
+            counts = load_quarter(spark, year, quarter)
+            logger.info("%sq%s loaded: %s", year, quarter, counts)
+    finally:
+        # Explicit rather than left to process exit: under Airflow the worker
+        # process outlives the task and would accumulate a session per run.
+        spark.stop()
 
 
 if __name__ == "__main__":

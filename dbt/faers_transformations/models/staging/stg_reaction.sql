@@ -13,7 +13,8 @@ normalized as (
         try_cast(reactionoutcome as int) as outcome
     from source
     where
-        safetyreportid is not null
+        {{ faers_quarter_filter() }}
+        and safetyreportid is not null
         and reactionmeddrapt is not null
 ),
 
@@ -38,7 +39,11 @@ final as (
     select
         s.*,
         c_reac.custom_group as custom_reaction_group,
-        c_reac.custom_group_label as custom_reaction_group_label
+        c_reac.custom_group_label as custom_reaction_group_label,
+        -- Distinguishes a reaction grouped by an explicit rule from one that
+        -- landed in its group by fallback, so consumers can tell how much
+        -- confidence a grouping carries instead of treating all alike.
+        c_reac.mapping_basis as custom_reaction_group_basis
     from standardized as s
     left join {{ ref('custom_reaction_groups_mapping') }} as c_reac
         on s.reaction = c_reac.reaction_normalized

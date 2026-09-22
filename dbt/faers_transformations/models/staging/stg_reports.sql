@@ -28,7 +28,8 @@ normalized as (
         companynumb as company_number
     from source
     where
-        safetyreportid is not null
+        {{ faers_quarter_filter() }}
+        and safetyreportid is not null
         and serious is not null
 ),
 
@@ -45,12 +46,16 @@ standardized as (
             when serious = 1 then 'yes'
             when serious = 2 then 'no'
         end as serious,
-        congenital_anomaly,
-        death,
-        disabling,
-        hospitalization,
-        lifethreatening,
-        other_serious,
+        -- The seriousness criteria are presence flags: FAERS sets them to 1
+        -- when the criterion applies and omits the element otherwise. Passed
+        -- through raw they are unsummable, so they are decoded to total
+        -- booleans here — see the macro for why absence means false.
+        {{ faers_seriousness_flag('congenital_anomaly') }} as congenital_anomaly,
+        {{ faers_seriousness_flag('death') }} as death,
+        {{ faers_seriousness_flag('disabling') }} as disabling,
+        {{ faers_seriousness_flag('hospitalization') }} as hospitalization,
+        {{ faers_seriousness_flag('lifethreatening') }} as lifethreatening,
+        {{ faers_seriousness_flag('other_serious') }} as other_serious,
         case
             when fulfill_expedite_criteria = 1 then 'identified'
             when fulfill_expedite_criteria = 2 then 'other'
@@ -67,7 +72,9 @@ final as (
     select
         s.* exclude (source_country, occurrence_country),
         c_source.country_code as source_country,
-        c_occurrence.country_code as occurrence_country
+        c_source.country_name as source_country_name,
+        c_occurrence.country_code as occurrence_country,
+        c_occurrence.country_name as occurrence_country_name
     from standardized as s
     left join {{ ref('country_mapping') }} as c_source
         on c_source.raw_country = s.source_country

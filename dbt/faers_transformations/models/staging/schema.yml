@@ -23,7 +23,12 @@ models:
       - name: age_unit
         description: "Unit for onset_age (e.g. year, month, day), decoded from the FAERS patientonsetageunit code via the time_unit_code_mapping seed."
       - name: sex
-        description: "Decoded patient sex: male, female, or unknown (from the FAERS patientsex code 0/1/2; unmapped codes also fall back to unknown)."
+        description: >
+          Decoded patient sex: male, female, or unknown, from the FAERS
+          patientsex code 0/1/2. Null when the report gives no sex at all —
+          distinct from the code 0 "unknown", which is a reported value. The
+          two were previously merged, which put 47,681 unreported rows into a
+          category holding 92 real ones.
         data_tests:
           - accepted_values:
               arguments:
@@ -41,7 +46,11 @@ models:
         data_tests:
           - not_null
       - name: version
-        description: "FAERS report version number (safetyreportversion). Multiple versions of the same drug are consolidated in int_drugs."
+        description: "FAERS report version number (safetyreportversion). int_drugs keeps only each report's latest version."
+      - name: drug_index
+        description: "Position of this drug entry within its report, from the parser's posexplode. A report lists a drug once per administered dose, so (report_id, drug_index) is what keeps repeated dose entries for the same product distinct."
+        data_tests:
+          - not_null
       - name: medicinal_product
         description: "The name of the medicinal product"
         data_tests:
@@ -69,18 +78,51 @@ models:
         description: "Route of administration (e.g. oral, intravenous), decoded from the FAERS drugadministrationroute code via the administration_route_mapping seed."
       - name: dosage_amount
         description: "Numeric dose amount as reported (FAERS drugstructuredosagenumb)."
+      - name: dosage_unit_code
+        description: >
+          Raw FAERS drugstructuredosageunit code. Kept alongside the decoded
+          dosage_unit because FDA documents only codes 1-4 and refers the rest
+          to the ICH E2B(R2) spec, which the FAERS download does not bundle:
+          2020q1 carries 36 distinct codes, so ~26% of dosed rows have a code
+          this project cannot yet resolve. Surfacing it keeps those doses
+          visibly unresolved rather than silently unitless.
       - name: dosage_unit
-        description: "Decoded unit for dosage_amount: kg, G, Mg, or µg (from the FAERS drugstructuredosageunit code 001-004)."
+        description: >
+          Decoded unit for dosage_amount, from the dosage_unit_mapping seed.
+          Null where the code is outside the four FDA documents. Symbols are
+          the correct SI ones (kg, g, mg, µg); the FAERS spec table renders
+          them "G" and "Mg", but Mg is megagram in SI and mg is milligram — a
+          10^9 difference on a dose, so the spec's casing is not reproduced.
         data_tests:
           - accepted_values:
               arguments:
-                values: ["kg", "G", "Mg", "µg"]
+                values: ["kg", "g", "mg", "µg"]
               config:
                 severity: warn
       - name: start_date
-        description: "Date the drug treatment started. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped."
+        description: "Date the drug treatment started. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped, and values too short to be a year become null."
+        data_tests:
+          # A 4-digit year passes the macro's length gate but can still be a
+          # typo (3019 for 2019). Warn rather than error: these are faults in
+          # the source data, not in the model, and the count is worth watching.
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: "'1900-01-01'::date"
+                max_value: "current_date()"
+              config:
+                severity: warn
       - name: end_date
-        description: "Date the drug treatment ended. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped."
+        description: "Date the drug treatment ended. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped, and values too short to be a year become null."
+        data_tests:
+          # A 4-digit year passes the macro's length gate but can still be a
+          # typo (3019 for 2019). Warn rather than error: these are faults in
+          # the source data, not in the model, and the count is worth watching.
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: "'1900-01-01'::date"
+                max_value: "current_date()"
+              config:
+                severity: warn
       - name: duration
         description: "Reported treatment duration (FAERS drugtreatmentduration), in the unit given by duration_unit."
       - name: duration_unit
@@ -106,13 +148,32 @@ models:
           drugrecurrence array (which can have multiple entries per drug) down to
           one row per drug by keeping the last entry with a non-null value here.
       - name: taken_action
-        description: "Action taken with the drug in response to the adverse event (FAERS actiondrug code, passed through unmapped)."
-      - name: use_stopped_reduced
-        description: "Whether use of the drug was stopped or reduced: yes, no, or \"doesn't Apply\" (from the FAERS drugadditional code 1-3)."
+        description: >
+          Decoded action taken with the drug in response to the adverse event
+          (FAERS actiondrug codes 1-6, per the bundled XML_NTS spec). Was
+          previously passed through as a bare integer, which would have put a
+          meaningless "3" on a dashboard where it means "dose increased".
         data_tests:
           - accepted_values:
               arguments:
-                values: ["yes", "no", "doesn't Apply"]
+                values: ["drug withdrawn", "dose reduced", "dose increased",
+                         "dose not changed", "unknown", "not applicable"]
+              config:
+                severity: warn
+      - name: use_stopped_reduced
+        description: >
+          Dechallenge outcome (FAERS drugadditional, codes 1-3): whether the
+          event ABATED after the drug was stopped or the dose reduced — not
+          whether the drug was stopped, which is what the column name suggests
+          and what this description previously said. A positive dechallenge is
+          a causality signal, so the distinction matters for any attribution
+          analysis. Values: yes, no, "doesn't Apply".
+        data_tests:
+          - accepted_values:
+              arguments:
+                # The apostrophe is doubled for SQL, not a typo: dbt's
+                # accepted_values macro quotes each value without escaping it.
+                values: ["yes", "no", "doesn''t Apply"]
               config:
                 severity: warn
 
@@ -149,6 +210,14 @@ models:
         description: "Internal grouping key for the reaction, from the custom_reaction_groups_mapping seed (a project-defined MedDRA-derived grouping, not a FAERS field)."
       - name: custom_reaction_group_label
         description: "Human-readable label for custom_reaction_group, from the custom_reaction_groups_mapping seed."
+      - name: custom_reaction_group_basis
+        description: "Whether the reaction was grouped by an explicit rule or by fallback (custom_reaction_groups_mapping.mapping_basis). Lets consumers tell a confidently-grouped reaction from a catch-all one."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["rule", "fallback"]
+              config:
+                severity: warn
 
   - name: stg_reports
     description: "Model for cleaning and transforming the FAERS reports data"
@@ -160,21 +229,50 @@ models:
       - name: version
         description: "FAERS report version number (safetyreportversion). Multiple versions of the same report_id are consolidated in int_reports."
       - name: receipt_date
-        description: "The date the report was received. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped."
+        description: "The date the report was received. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped, and values too short to be a year become null."
         data_tests:
           - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: "'1900-01-01'::date"
+                max_value: "current_date()"
+              config:
+                severity: warn
       - name: transmission_date
-        description: "The date the report was transmitted. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped."
+        description: "The date the report was transmitted. Parsed via the faers_to_date macro, so year- or month-only precision dates are padded to the 1st rather than dropped, and values too short to be a year become null."
         data_tests:
           - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: "'1900-01-01'::date"
+                max_value: "current_date()"
+              config:
+                severity: warn
       - name: source_country
-        description: "The country from which the report originated"
+        description: >
+          ISO code of the country the report originated from, mapped from the
+          raw FAERS string via the country_mapping seed. Null for the 13,137
+          2020q1 reports that name no country, and for 96 further ISO-3166
+          codes (PR, PH, TH, PK, ...) the seed does not yet cover — 16,741 rows
+          in total. Warning severity for that reason; extending the seed is
+          tracked for dim_country in the marts layer.
         data_tests:
-          - not_null
+          - not_null:
+              config:
+                severity: warn
+      - name: source_country_name
+        description: "Readable name of source_country, from the country_mapping seed."
       - name: occurrence_country
-        description: "The country where the adverse event occurred"
+        description: >
+          ISO code of the country the adverse event occurred in, mapped via the
+          country_mapping seed. Null where the report names no country or the
+          seed lacks the code — see source_country.
         data_tests:
-          - not_null
+          - not_null:
+              config:
+                severity: warn
+      - name: occurrence_country_name
+        description: "Readable name of occurrence_country, from the country_mapping seed."
       - name: report_type
         description: "FAERS report type code (reporttype), passed through unmapped."
       - name: serious
@@ -187,33 +285,52 @@ models:
               config:
                 severity: warn
       - name: congenital_anomaly
-        description: "Flag indicating the adverse event involved a congenital anomaly (FAERS seriousnesscongenitalanomali)."
+        description: "Boolean: whether the adverse event involved a congenital anomaly (FAERS seriousnesscongenitalanomali). A presence flag in FAERS: set to 1 when the criterion applies, element omitted otherwise. Decoded to a total boolean (absent = false) so it can be summed or averaged directly."
       - name: death
-        description: "Flag indicating the adverse event resulted in death (FAERS seriousnessdeath)."
+        description: "Boolean: whether the adverse event resulted in death (FAERS seriousnessdeath). A presence flag in FAERS: set to 1 when the criterion applies, element omitted otherwise. Decoded to a total boolean (absent = false) so it can be summed or averaged directly."
       - name: disabling
-        description: "Flag indicating the adverse event was disabling (FAERS seriousnessdisabling)."
+        description: "Boolean: whether the adverse event was disabling (FAERS seriousnessdisabling). A presence flag in FAERS: set to 1 when the criterion applies, element omitted otherwise. Decoded to a total boolean (absent = false) so it can be summed or averaged directly."
       - name: hospitalization
-        description: "Flag indicating the adverse event required hospitalization (FAERS seriousnesshospitalization)."
+        description: "Boolean: whether the adverse event required hospitalization (FAERS seriousnesshospitalization). A presence flag in FAERS: set to 1 when the criterion applies, element omitted otherwise. Decoded to a total boolean (absent = false) so it can be summed or averaged directly."
       - name: lifethreatening
-        description: "Flag indicating the adverse event was life-threatening (FAERS seriousnesslifethreatening)."
+        description: "Boolean: whether the adverse event was life-threatening (FAERS seriousnesslifethreatening). A presence flag in FAERS: set to 1 when the criterion applies, element omitted otherwise. Decoded to a total boolean (absent = false) so it can be summed or averaged directly."
       - name: other_serious
-        description: "Flag indicating another, otherwise-uncategorized seriousness criterion applied (FAERS seriousnessother)."
+        description: "Boolean: whether another, otherwise-uncategorized seriousness criterion applied (FAERS seriousnessother). A presence flag in FAERS: set to 1 when the criterion applies, element omitted otherwise. Decoded to a total boolean (absent = false) so it can be summed or averaged directly."
       - name: fulfill_expedite_criteria
-        description: "Indicates whether the report fulfills expedite criteria"
+        description: >
+          Whether the report fulfills expedite criteria. E2B defines only
+          1 = identified and 2 = other, but 2020q1 also carries out-of-spec
+          codes 3, 4 and 5 on 27,125 rows, which decode to null rather than
+          being invented into a category. not_null is therefore a warning, not
+          an error: it tracks how much of the source is out of spec instead of
+          asserting something the data cannot satisfy.
         data_tests:
-          - not_null
+          - not_null:
+              config:
+                severity: warn
           - accepted_values:
               arguments:
                 values: ["identified", "other"]
               config:
                 severity: warn
       - name: duplicate_flag
-        description: "Flag indicating this report was marked as a duplicate of another (FAERS duplicate)."
+        description: "FAERS duplicate element. Despite the name this does not mark a redundant report: it is set on 94% of rows and never identifies a collision. Never used as a filter — see models/README.md."
       - name: duplicate_numb
-        description: "Report number of the report this one duplicates, if duplicate_flag is set (FAERS duplicatenumb)."
+        description: "Sender's own case number, byte-identical to company_number wherever populated (FAERS duplicatenumb). A case-linkage identifier, not a pointer to a redundant report."
       - name: duplicate_source
-        description: "Source of the duplicate report reference (FAERS duplicatesource)."
+        description: "Organisation that supplied duplicate_numb (FAERS duplicatesource)."
       - name: authority_number
         description: "Regulatory authority's case number for the report (FAERS authoritynumb)."
       - name: company_number
         description: "Reporting company's internal case number for the report (FAERS companynumb)."
+
+  - name: stg_deleted_cases
+    description: >
+      Reports retracted by FDA, unioned across every quarter's deleted-case file.
+      Used as an anti-join by every intermediate model.
+    columns:
+      - name: report_id
+        description: Retracted FAERS case number.
+        data_tests:
+          - not_null
+          - unique

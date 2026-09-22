@@ -37,3 +37,11 @@ models:
     intermediate:
       +materialized: table
       +schema: intermediate
+    marts:
+      +materialized: table
+      +schema: mart
+
+vars:
+  # Quarters a dev/CI run is restricted to, so a full-backfill warehouse doesn't
+  # have to be rebuilt to test a model change. An empty list means all quarters.
+  faers_quarters: []

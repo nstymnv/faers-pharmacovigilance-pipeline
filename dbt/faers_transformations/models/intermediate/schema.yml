@@ -5,13 +5,15 @@ models:
   - name: int_reports
     description: >
       Canonical FAERS report-level records with duplicate versions consolidated
-      into a single record per report_id.
+      into a single record per report_id. Reports retracted by FDA are excluded;
+      see models/README.md for the duplicate and retraction policy.
 
     columns:
       - name: report_id
         description: Unique FAERS safety report identifier.
-        tests:
+        data_tests:
           - not_null
+          - unique
 
       - name: version
         description: Latest version of the FAERS report.
@@ -23,10 +25,16 @@ models:
         description: Date the report was transmitted.
 
       - name: source_country
-        description: Country from which the report originated, merged across versions.
+        description: ISO code of the country from which the report originated, merged across versions.
+
+      - name: source_country_name
+        description: Readable name of source_country, from the country_mapping seed.
 
       - name: occurrence_country
-        description: Country where the adverse event occurred, merged across versions.
+        description: ISO code of the country where the adverse event occurred, merged across versions.
+
+      - name: occurrence_country_name
+        description: Readable name of occurrence_country, from the country_mapping seed.
 
       - name: report_type
         description: FAERS report type code, merged across versions.
@@ -35,34 +43,59 @@ models:
         description: Whether the adverse event was serious (yes/no), merged across versions.
 
       - name: congenital_anomaly
-        description: Flag indicating the adverse event involved a congenital anomaly, merged across versions.
+        description: >
+          Boolean: whether the adverse event involved a congenital anomaly. A FAERS presence flag decoded to a total
+          boolean (absent = false), so it can be summed directly. Merged
+          across versions.
 
       - name: death
-        description: Flag indicating the adverse event resulted in death, merged across versions.
+        description: >
+          Boolean: whether the adverse event resulted in death. A FAERS presence flag decoded to a total
+          boolean (absent = false), so it can be summed directly. Merged
+          across versions.
 
       - name: disabling
-        description: Flag indicating the adverse event was disabling, merged across versions.
+        description: >
+          Boolean: whether the adverse event was disabling. A FAERS presence flag decoded to a total
+          boolean (absent = false), so it can be summed directly. Merged
+          across versions.
 
       - name: hospitalization
-        description: Flag indicating the adverse event required hospitalization, merged across versions.
+        description: >
+          Boolean: whether the adverse event required hospitalization. A FAERS presence flag decoded to a total
+          boolean (absent = false), so it can be summed directly. Merged
+          across versions.
 
       - name: lifethreatening
-        description: Flag indicating the adverse event was life-threatening, merged across versions.
+        description: >
+          Boolean: whether the adverse event was life-threatening. A FAERS presence flag decoded to a total
+          boolean (absent = false), so it can be summed directly. Merged
+          across versions.
 
       - name: other_serious
-        description: Flag indicating another, otherwise-uncategorized seriousness criterion applied, merged across versions.
+        description: >
+          Boolean: whether another, otherwise-uncategorized seriousness criterion
+          applied. A FAERS presence flag decoded to a total boolean
+          (absent = false), so it can be summed directly. Merged across
+          versions.
 
       - name: fulfill_expedite_criteria
         description: Whether the report fulfills expedite criteria, merged across versions.
 
       - name: duplicate_flag
-        description: Indicates whether the report has duplicate/version information.
+        description: >
+          FAERS duplicate element. Despite the name this does NOT mark a
+          redundant report — it is set on 94% of reports and never identifies a
+          collision. Not used as a filter anywhere; see models/README.md.
 
       - name: duplicate_numb
-        description: Report number of the report this one duplicates, if duplicate_flag is set.
+        description: >
+          Sender's own case number (byte-identical to company_number on every
+          row where it is populated). A case-linkage identifier, not a pointer
+          to a redundant report.
 
       - name: duplicate_source
-        description: Source of the duplicate report reference.
+        description: Organisation that supplied duplicate_numb.
 
       - name: authority_number
         description: Regulatory authority's case number for the report.
@@ -73,13 +106,19 @@ models:
 
   - name: int_demographics
     description: >
-      Consolidated demographic information for each FAERS report.
+      Consolidated demographic information for each FAERS report. One row per
+      report_id; retracted reports excluded.
 
     columns:
       - name: report_id
         description: FAERS safety report identifier.
-        tests:
+        data_tests:
           - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('int_reports')
+                field: report_id
 
       - name: age_group
         description: Standardized patient age group, merged across versions.
@@ -91,7 +130,9 @@ models:
         description: Unit used for onset age, merged across versions.
 
       - name: sex
-        description: Standardized patient sex, merged across versions.
+        description: >
+          Standardized patient sex, merged across versions. Null where no sex
+          was reported, distinct from the reported value "unknown".
 
       - name: weight_kg
         description: Patient weight in kilograms, merged across versions.
@@ -99,13 +140,35 @@ models:
 
   - name: int_drugs
     description: >
-      Deduplicated drug records associated with FAERS reports.
-      Multiple drugs can legitimately belong to the same report.
+      Drug entries associated with FAERS reports, taken from each report's latest
+      version. One row per (report_id, drug_index) — per drug *entry*, not per
+      distinct product: a report lists a drug once per administered dose, so the
+      same product recurs legitimately. Collapse to one row per product in the
+      marts by counting distinct reports. Retracted reports excluded.
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - report_id
+              - drug_index
 
     columns:
       - name: report_id
         description: FAERS safety report identifier.
-        tests:
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_reports')
+                field: report_id
+
+      - name: drug_index
+        description: >
+          Position of this drug entry within its report, assigned by the parser.
+          Distinguishes repeated dose entries for the same product; only
+          meaningful within the report version this row came from.
+        data_tests:
           - not_null
 
       - name: version
@@ -135,8 +198,16 @@ models:
       - name: dosage_amount
         description: Numeric dose amount as reported.
 
+      - name: dosage_unit_code
+        description: >
+          Raw FAERS dosage-unit code, kept so a dose with an unresolved unit
+          stays visibly unresolved. See stg_drugs.
+
       - name: dosage_unit
-        description: Unit for dosage_amount (e.g. kg, G, Mg, µg).
+        description: >
+          Decoded SI unit for dosage_amount (kg, g, mg, µg), from the
+          dosage_unit_mapping seed. Null for codes outside the four FDA
+          documents — see stg_drugs.
 
       - name: start_date
         description: Date the drug treatment started.
@@ -165,22 +236,40 @@ models:
           all — see stg_drugs for detail.
 
       - name: taken_action
-        description: Action taken with the drug in response to the adverse event.
+        description: >
+          Decoded action taken with the drug in response to the adverse event
+          (drug withdrawn / dose reduced / dose increased / dose not changed /
+          unknown / not applicable).
 
       - name: use_stopped_reduced
-        description: Whether use of the drug was stopped or reduced (yes/no/"doesn't Apply").
+        description: >
+          Dechallenge outcome: whether the event abated after the drug was
+          stopped or reduced — not whether it was stopped. See stg_drugs.
 
 
   - name: int_reactions
     description: >
-      Deduplicated adverse reaction records associated with FAERS reports.
-      Multiple reactions can legitimately belong to the same report.
+      Deduplicated adverse reaction records associated with FAERS reports, taken
+      from each report's latest version. One row per (report_id, reaction);
+      conflicting outcomes for the same reaction resolve to the most severe.
+      Retracted reports excluded.
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - report_id
+              - reaction
 
     columns:
       - name: report_id
         description: FAERS safety report identifier.
-        tests:
+        data_tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('int_reports')
+                field: report_id
 
       - name: version
         description: FAERS report version this reaction record was last seen in (see stg_reaction; not merged across versions — see the model header comment for why).
@@ -189,13 +278,26 @@ models:
         description: Reported adverse reaction.
 
       - name: meddra_version
-        description: MedDRA version associated with the reaction.
+        description: >
+          Latest MedDRA version this reaction was coded under on the report. Not
+          part of the key: keying on it kept a re-coded reaction as two rows.
 
       - name: outcome
-        description: Standardized outcome of the reported reaction.
+        description: >
+          Standardized outcome of the reported reaction. Where a report gave the
+          same reaction conflicting outcomes, the most clinically severe wins
+          (fatal > sequelae > not recovered > recovering > recovered > unknown),
+          so a fatal outcome is never masked by a co-reported recovery.
 
       - name: custom_reaction_group
         description: Internal grouping key for the reaction (project-defined MedDRA-derived grouping, not a FAERS field).
 
       - name: custom_reaction_group_label
         description: Human-readable label for custom_reaction_group.
+
+      - name: custom_reaction_group_basis
+        description: >
+          Whether this reaction was assigned to its group by an explicit rule
+          or by fallback, from the custom_reaction_groups_mapping seed. Lets
+          consumers tell a confident grouping from a catch-all one.
+

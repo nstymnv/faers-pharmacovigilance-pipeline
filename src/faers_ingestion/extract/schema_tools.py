@@ -18,13 +18,15 @@ logger = logging.getLogger(__name__)
 
 def regenerate(year: int, quarter: int) -> None:
     spark = create_spark()
-
-    inferred = (
-        spark.read.format("xml")
-        .option("rowTag", "safetyreport")
-        .load(stage_xml_prefix(year, quarter))
-        .schema
-    )
+    try:
+        inferred = (
+            spark.read.format("xml")
+            .option("rowTag", "safetyreport")
+            .load(stage_xml_prefix(year, quarter))
+            .schema
+        )
+    finally:
+        spark.stop()
 
     SCHEMA_FILE.write_text(json.dumps(inferred.jsonValue(), indent=2) + "\n")
     logger.info("wrote %s with %d top-level fields", SCHEMA_FILE, len(inferred.fields))
