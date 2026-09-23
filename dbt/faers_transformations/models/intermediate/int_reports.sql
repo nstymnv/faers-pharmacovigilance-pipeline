@@ -1,5 +1,9 @@
 -- Grain: one row per report_id — versions are consolidated by merging the
 -- latest non-null value per field (see the max_by pattern below).
+--
+-- Reports retracted by FDA are removed here rather than flagged, so every
+-- downstream denominator excludes them by default and no mart can forget to
+-- filter. See models/README.md for the duplicate/retraction policy.
 with ranked_versions as (
 
     select *
@@ -12,14 +16,36 @@ with ranked_versions as (
 
 ),
 
+live_reports as (
+
+    select r.*
+    from ranked_versions as r
+    left join {{ ref('stg_deleted_cases') }} as d
+        on r.report_id = d.report_id
+    where d.report_id is null
+
+),
+
 deduplicated as (
 
     select
 
         report_id,
         max(version) as version,
-        max_by(receipt_date, version) as receipt_date,
-        max_by(transmission_date, version) as transmission_date,
+
+        -- Every field below takes the latest version that actually supplied a
+        -- value. A bare max_by(field, version) would return null whenever the
+        -- newest version happens to omit a field an earlier one carried, which
+        -- is why the dates use the same null-guarded form as the rest.
+        max_by(
+            receipt_date,
+            iff(receipt_date is not null, version, null)
+        ) as receipt_date,
+
+        max_by(
+            transmission_date,
+            iff(transmission_date is not null, version, null)
+        ) as transmission_date,
 
         max_by(
             source_country,
@@ -27,9 +53,19 @@ deduplicated as (
         ) as source_country,
 
         max_by(
+            source_country_name,
+            iff(source_country_name is not null, version, null)
+        ) as source_country_name,
+
+        max_by(
             occurrence_country,
             iff(occurrence_country is not null, version, null)
         ) as occurrence_country,
+
+        max_by(
+            occurrence_country_name,
+            iff(occurrence_country_name is not null, version, null)
+        ) as occurrence_country_name,
 
         max_by(
             report_type,
@@ -101,7 +137,7 @@ deduplicated as (
             iff(company_number is not null, version, null)
         ) as company_number
 
-    from ranked_versions
+    from live_reports
 
     group by report_id
 

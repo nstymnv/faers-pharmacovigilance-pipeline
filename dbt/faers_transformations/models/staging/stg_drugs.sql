@@ -1,5 +1,9 @@
--- Grain: one row per drug per (report_id, version) — a report version can
--- list multiple drugs, prior to deduplication in int_drugs.
+-- Grain: one row per drug entry per (report_id, version), keyed by drug_index.
+--
+-- A report lists a drug once per administered dose, not once per product, so the
+-- same product legitimately recurs dozens of times on one report with its own
+-- dose and dates. drug_index keeps those entries distinct; collapsing them to one
+-- row per product happens in the marts, not here.
 with source as (
     select * from {{ source('faers_db', 'drug') }}
 ),
@@ -8,6 +12,7 @@ normalized as (
     select
         safetyreportid as report_id,
         safetyreportversion as version,
+        drug_index,
         upper(trim(medicinalproduct)) as medicinal_product,
         upper(trim(activesubstancename)) as active_substance,
         cast(drugcharacterization as int) as drug_characterization,
@@ -16,7 +21,7 @@ normalized as (
         drugauthorizationnumb as drug_authorization_number,
         cast(drugadministrationroute as string) as administration_route,
         drugstructuredosagenumb as dosage_amount,
-        cast(drugstructuredosageunit as string) as dosage_unit,
+        try_cast(drugstructuredosageunit as int) as dosage_unit_code,
         {{ faers_to_date('drugstartdate') }} as start_date,
         {{ faers_to_date('drugenddate') }} as end_date,
         try_cast(drugtreatmentduration as float) as duration,
@@ -33,7 +38,8 @@ normalized as (
 
     from source
     where
-        safetyreportid is not null
+        {{ faers_quarter_filter() }}
+        and safetyreportid is not null
         and medicinalproduct is not null
         and activesubstancename is not null
         and drugcharacterization is not null
@@ -44,6 +50,7 @@ standardized as (
     select
         report_id,
         version,
+        drug_index,
         medicinal_product,
         active_substance,
         case
@@ -56,12 +63,7 @@ standardized as (
         drug_authorization_number,
         administration_route,
         dosage_amount,
-        case
-            when dosage_unit = '001' then 'kg'
-            when dosage_unit = '002' then 'G'
-            when dosage_unit = '003' then 'Mg'
-            when dosage_unit = '004' then 'µg'
-        end as dosage_unit,
+        dosage_unit_code,
         start_date,
         end_date,
         duration,
@@ -72,7 +74,14 @@ standardized as (
             when drug_recurrence = 3 then 'unknown'
         end as drug_recurrence,
         recurrence_action,
-        taken_action,
+        case
+            when taken_action = 1 then 'drug withdrawn'
+            when taken_action = 2 then 'dose reduced'
+            when taken_action = 3 then 'dose increased'
+            when taken_action = 4 then 'dose not changed'
+            when taken_action = 5 then 'unknown'
+            when taken_action = 6 then 'not applicable'
+        end as taken_action,
         case
             when use_stopped_reduced = 1 then 'yes'
             when use_stopped_reduced = 2 then 'no'
@@ -82,15 +91,23 @@ standardized as (
 ),
 
 final as (
+    -- dosage_unit_code is kept alongside the decoded name on purpose. FDA
+    -- documents only codes 1-4 and refers the rest to the ICH E2B(R2) spec,
+    -- which is not bundled with the FAERS download, so ~26% of dosed rows
+    -- decode to null. Surfacing the raw code keeps a dose of "500 <unknown
+    -- unit>" visibly unresolved rather than silently unitless.
     select
         s.* exclude (administration_route, duration_unit),
         a.administration_route,
-        t.unit_name as duration_unit
+        t.unit_name as duration_unit,
+        du.dosage_unit
     from standardized as s
     left join {{ ref('administration_route_mapping') }} as a
         on s.administration_route = a.administration_route_code
     left join {{ ref('time_unit_code_mapping') }} as t
         on s.duration_unit = t.unit_code
+    left join {{ ref('dosage_unit_mapping') }} as du
+        on s.dosage_unit_code = du.dosage_unit_code
 )
 
 select * from final

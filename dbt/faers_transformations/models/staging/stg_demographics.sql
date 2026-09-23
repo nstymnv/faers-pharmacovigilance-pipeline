@@ -15,7 +15,9 @@ normalized as (
         try_cast(patientsex as int) as sex,
         try_cast(patientweight as float) as weight_kg
     from source
-    where safetyreportid is not null
+    where
+        {{ faers_quarter_filter() }}
+        and safetyreportid is not null
 ),
 
 standardized as (
@@ -32,11 +34,14 @@ standardized as (
         end as age_group,
         onset_age,
         age_unit_code,
+        -- 0 is a reported value ("unknown", per the FAERS spec) and null is an
+        -- absent one. The previous else-branch merged 47,681 unreported rows
+        -- into the 92 genuinely reported as unknown, which would overstate a
+        -- demographic category ~500x in any "which patient groups" breakdown.
         case
             when sex = 0 then 'unknown'
             when sex = 1 then 'male'
             when sex = 2 then 'female'
-            else 'unknown'
         end as sex,
         weight_kg
 

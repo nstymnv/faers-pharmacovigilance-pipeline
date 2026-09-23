@@ -3,8 +3,13 @@ version: 2
 sources:
   - name: faers_db
     description: "The FDA FAERS Adverse Events database"
-    database: faers_db 
+    database: faers_db
     schema: raw
+    config:
+      loaded_at_field: load_ts
+      freshness:
+        warn_after: {count: 120, period: day}
+        error_after: {count: 210, period: day}
     tables:
       - name: reports
         description: "The FAERS reports table"
@@ -29,6 +34,10 @@ sources:
           - name: duplicatesource
           - name: authoritynumb
           - name: companynumb
+          - name: source_quarter
+            description: "FAERS quarter this row was loaded from, e.g. 2020q1. Written by the load step; the unit of delete-then-append replacement."
+          - name: load_ts
+            description: "Timestamp the row was written to RAW by the load step."
       - name: demographics
         description: "The patients' demographic data table"
         columns:
@@ -39,11 +48,17 @@ sources:
           - name: patientonsetageunit
           - name: patientsex
           - name: patientweight
+          - name: source_quarter
+            description: "FAERS quarter this row was loaded from, e.g. 2020q1. Written by the load step; the unit of delete-then-append replacement."
+          - name: load_ts
+            description: "Timestamp the row was written to RAW by the load step."
       - name: drug
         description: "The complete medication information table"
         columns:
           - name: safetyreportid
           - name: safetyreportversion
+          - name: drug_index
+            description: "Position of this drug entry within its report, assigned by the parser's posexplode. Together with safetyreportid it keys the table 1:1; without it, repeated dose entries for the same product are indistinguishable."
           - name: medicinalproduct
           - name: activesubstancename
           - name: drugcharacterization
@@ -62,6 +77,10 @@ sources:
             description: "Recurrence-action code for this drug: the drugrecurrence array is exploded and collapsed back to the last valid (non-null) entry per drug"
           - name: actiondrug
           - name: drugadditional
+          - name: source_quarter
+            description: "FAERS quarter this row was loaded from, e.g. 2020q1. Written by the load step; the unit of delete-then-append replacement."
+          - name: load_ts
+            description: "Timestamp the row was written to RAW by the load step."
       - name: reaction
         description: "The patients' reaction data table"
         columns:
@@ -70,3 +89,19 @@ sources:
           - name: reactionmeddrapt
           - name: reactionmeddraversionpt
           - name: reactionoutcome
+          - name: source_quarter
+            description: "FAERS quarter this row was loaded from, e.g. 2020q1. Written by the load step; the unit of delete-then-append replacement."
+          - name: load_ts
+            description: "Timestamp the row was written to RAW by the load step."
+      - name: deleted_cases
+        description: >
+          FDA's list of retracted FAERS case numbers, published as a plain-text
+          file alongside each quarter's XML. Retractions are not limited to
+          earlier quarters, so the list is applied across the whole warehouse.
+        columns:
+          - name: case_id
+            description: "Retracted FAERS case number, matching reports.safetyreportid."
+          - name: source_quarter
+            description: "FAERS quarter whose deleted-case file contributed this id."
+          - name: load_ts
+            description: "Timestamp the row was written to RAW by the load step."

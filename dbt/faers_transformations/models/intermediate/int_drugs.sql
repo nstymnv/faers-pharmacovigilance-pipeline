@@ -1,27 +1,32 @@
--- Grain: one row per (report_id, medicinal_product, active_substance,
--- drug_characterization, drug_indication, drug_authorization_number) — i.e.
--- one row per distinct drug on a report, deduplicated across versions.
+-- Grain: one row per (report_id, drug_index) — one row per drug *entry*, not
+-- per distinct product.
 --
--- Unlike reports/demographics, a drug record isn't expected to gain new
--- non-null fields across versions independently, so the latest version's row
--- is taken as-is instead of merging fields with max_by.
-with ranked_versions as (
+-- A FAERS report lists a drug once per administered dose: report 12610564 carries
+-- 100 AFSTYLA entries, each with its own dose and start date. Those entries are
+-- kept here so the dosing detail survives into the warehouse. Collapsing them to
+-- one row per product happens in the marts, where counting distinct reports per
+-- drug is what stops a single patient's treatment diary from outweighing a drug
+-- reported by a hundred separate patients.
+--
+-- The previous key was six drug attributes, which silently destroyed 155,043 of
+-- 1,899,889 rows (8.2%) in 2020q1 — 55,032 of the collapsed groups differed in
+-- dose, start date or route, so they were distinct exposures, not repeats.
+with latest_version as (
 
+    -- drug_index is assigned per report version, so index 3 in version 1 need
+    -- not be the same product as index 3 in version 2. Taking the newest
+    -- version's drug list whole, rather than resolving each index across
+    -- versions, keeps the list internally consistent — a later version
+    -- supersedes the entire drug list of the one before it.
     select *
     from {{ ref('stg_drugs') }}
 
-    qualify row_number() over (
-        partition by
-            report_id,
-            medicinal_product,
-            active_substance,
-            drug_characterization,
-            drug_indication,
-            drug_authorization_number
-        order by version desc
-    ) = 1
+    qualify version = max(version) over (partition by report_id)
 
 )
 
-select *
-from ranked_versions
+select d.*
+from latest_version as d
+left join {{ ref('stg_deleted_cases') }} as x
+    on d.report_id = x.report_id
+where x.report_id is null
