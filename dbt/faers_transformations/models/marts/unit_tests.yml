@@ -1,0 +1,127 @@
+unit_tests:
+
+  - name: test_disproportionality_math
+    model: mart_drug_reaction_signal
+    description: >
+      Hand-computed 2x2 tables over a ten-report universe. Three pairs, chosen
+      to exercise the cases that actually break: an ordinary pair, a pair where
+      the drug is reported with the reaction only once, and a zero-cell pair
+      where the reaction is never reported without the drug (c = 0), which is
+      undefined without the Haldane-Anscombe correction and is also the shape a
+      real signal takes.
+
+      Universe: reports 1-5 carry drug D1, reports 6-10 carry D2, all
+      implicated. Reaction R1 is on reports 1, 2, 3 and 6; reaction R2 only on
+      report 1.
+
+      Expected values are computed independently rather than read back from the
+      model. For (D1, R1): a = 3, and D1 appears on 5 reports so b = 2; R1
+      appears on 4 so c = 1; d = 10 - 5 - 4 + 3 = 4.
+    given:
+      - input: ref('fct_report_drug')
+        rows:
+          - {report_id: 1, drug_key: 'D1', is_implicated: true}
+          - {report_id: 2, drug_key: 'D1', is_implicated: true}
+          - {report_id: 3, drug_key: 'D1', is_implicated: true}
+          - {report_id: 4, drug_key: 'D1', is_implicated: true}
+          - {report_id: 5, drug_key: 'D1', is_implicated: true}
+          - {report_id: 6, drug_key: 'D2', is_implicated: true}
+          - {report_id: 7, drug_key: 'D2', is_implicated: true}
+          - {report_id: 8, drug_key: 'D2', is_implicated: true}
+          - {report_id: 9, drug_key: 'D2', is_implicated: true}
+          - {report_id: 10, drug_key: 'D2', is_implicated: true}
+      - input: ref('fct_report_reaction')
+        rows:
+          - {report_id: 1, reaction_key: 'R1'}
+          - {report_id: 2, reaction_key: 'R1'}
+          - {report_id: 3, reaction_key: 'R1'}
+          - {report_id: 6, reaction_key: 'R1'}
+          - {report_id: 1, reaction_key: 'R2'}
+      - input: ref('brg_drug_reaction')
+        rows:
+          - {report_id: 1, drug_key: 'D1', reaction_key: 'R1'}
+          - {report_id: 2, drug_key: 'D1', reaction_key: 'R1'}
+          - {report_id: 3, drug_key: 'D1', reaction_key: 'R1'}
+          - {report_id: 6, drug_key: 'D2', reaction_key: 'R1'}
+          - {report_id: 1, drug_key: 'D1', reaction_key: 'R2'}
+    expect:
+      rows:
+        # PRR = (a'/(a'+b')) / (c'/(c'+d')) and ROR = a'd'/b'c' on cells + 0.5;
+        # chi-square is Yates on the uncorrected cells. All three pairs fail the
+        # Evans gate, each for a different reason: the first on chi-square, the
+        # other two on the three-case minimum.
+        - {drug_key: 'D1', reaction_key: 'R1', a: 3, b: 2, c: 1, d: 4, n_total: 10,
+           prr: 2.3333333333333335, ror: 4.2, chi2_yates: 0.4166666666666667, is_signal: false}
+        - {drug_key: 'D2', reaction_key: 'R1', a: 1, b: 4, c: 3, d: 2, n_total: 10,
+           prr: 0.42857142857142855, ror: 0.23809523809523808, chi2_yates: 0.4166666666666667, is_signal: false}
+        # c = 0: PRR and ROR are only defined here because of the correction,
+        # and the Yates term goes negative, so the clamp must hold it at zero.
+        - {drug_key: 'D1', reaction_key: 'R2', a: 1, b: 4, c: 0, d: 5, n_total: 10,
+           prr: 3.0, ror: 3.6666666666666665, chi2_yates: 0.0, is_signal: false}
+
+  - name: test_drug_entry_collapse
+    model: fct_report_drug
+    description: >
+      One report listing the same product three times — the shape that made the
+      previous drug grain wrong. The three entries must become one row, the
+      suspect entry must win the role even though it is outnumbered by
+      concomitant ones, entry_count must preserve that there were three, and the
+      3019 typo must not become the exposure window's start. A second product on
+      the same report checks that the collapse groups by product rather than by
+      report.
+    given:
+      - input: ref('int_drugs')
+        rows:
+          - {report_id: 100, drug_index: 0, medicinal_product: 'AFSTYLA', active_substance: 'LONOCTOCOG ALFA',
+             drug_characterization: 'concomitant', start_date: '2020-01-05', end_date: '2020-01-10'}
+          - {report_id: 100, drug_index: 1, medicinal_product: 'AFSTYLA', active_substance: 'LONOCTOCOG ALFA',
+             drug_characterization: 'suspect', start_date: '2020-02-01', end_date: null}
+          - {report_id: 100, drug_index: 2, medicinal_product: 'AFSTYLA', active_substance: 'LONOCTOCOG ALFA',
+             drug_characterization: 'concomitant', start_date: '3019-07-25', end_date: '2020-03-01'}
+          - {report_id: 100, drug_index: 3, medicinal_product: 'NEXIUM', active_substance: 'ESOMEPRAZOLE MAGNESIUM',
+             drug_characterization: 'concomitant', start_date: null, end_date: null}
+      - input: ref('fct_report')
+        rows:
+          - {report_id: 100, receipt_date_key: 20200401}
+    expect:
+      rows:
+        - {report_id: 100, drug_role: 'suspect', is_implicated: true, entry_count: 3,
+           first_start_date: '2020-01-05', last_end_date: '2020-03-01', receipt_date_key: 20200401}
+        - {report_id: 100, drug_role: 'concomitant', is_implicated: false, entry_count: 1,
+           first_start_date: null, last_end_date: null, receipt_date_key: 20200401}
+
+  - name: test_onset_age_normalization
+    model: fct_report
+    description: >
+      Age is meaningless without its unit: the same number 6 is six years in one
+      report and sixty in another. Each row below is one unit the source
+      actually uses, plus the two kinds of value that must not survive — a
+      negative age, and a unit that is a dosing schedule rather than a duration.
+    given:
+      - input: ref('int_reports')
+        rows:
+          - {report_id: 1}
+          - {report_id: 2}
+          - {report_id: 3}
+          - {report_id: 4}
+          - {report_id: 5}
+          - {report_id: 6}
+          - {report_id: 7}
+      - input: ref('int_demographics')
+        rows:
+          - {report_id: 1, onset_age: 45, age_unit: 'Year'}
+          - {report_id: 2, onset_age: 6, age_unit: 'Decade'}
+          - {report_id: 3, onset_age: 18, age_unit: 'Month'}
+          - {report_id: 4, onset_age: 10, age_unit: 'Day'}
+          - {report_id: 5, onset_age: -5, age_unit: 'Year'}
+          - {report_id: 6, onset_age: 200, age_unit: 'Year'}
+          - {report_id: 7, onset_age: 3, age_unit: 'Trimester'}
+    expect:
+      rows:
+        - {report_id: 1, onset_age_years: 45.0}
+        - {report_id: 2, onset_age_years: 60.0}
+        - {report_id: 3, onset_age_years: 1.5}
+        - {report_id: 4, onset_age_years: 0.03}
+        - {report_id: 5, onset_age_years: null}
+        - {report_id: 6, onset_age_years: null}
+        - {report_id: 7, onset_age_years: null}

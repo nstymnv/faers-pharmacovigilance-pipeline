@@ -274,7 +274,15 @@ models:
       - name: occurrence_country_name
         description: "Readable name of occurrence_country, from the country_mapping seed."
       - name: report_type
-        description: "FAERS report type code (reporttype), passed through unmapped."
+        description: >
+          How the report reached FDA, decoded from the FAERS reporttype code.
+          "not available to sender" (code 4) is a reported value meaning the
+          sender does not know the type, distinct from null, which is the
+          element being absent.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["spontaneous", "report from study", "other", "not available to sender"]
       - name: serious
         description: "Indicates whether the adverse event was serious"
         data_tests:

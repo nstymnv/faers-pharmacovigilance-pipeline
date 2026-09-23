@@ -37,7 +37,9 @@ models:
         description: Readable name of occurrence_country, from the country_mapping seed.
 
       - name: report_type
-        description: FAERS report type code, merged across versions.
+        description: >
+          How the report reached FDA (spontaneous / report from study / other /
+          not available to sender), merged across versions.
 
       - name: serious
         description: Whether the adverse event was serious (yes/no), merged across versions.

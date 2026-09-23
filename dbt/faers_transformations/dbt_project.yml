@@ -40,8 +40,28 @@ models:
     marts:
       +materialized: table
       +schema: mart
+      # Mart descriptions are the only documentation a Power BI user ever sees,
+      # so they are pushed into Snowflake's own comments rather than living only
+      # in dbt docs.
+      +persist_docs:
+        relation: true
+        columns: true
 
 vars:
   # Quarters a dev/CI run is restricted to, so a full-backfill warehouse doesn't
   # have to be rebuilt to test a model change. An empty list means all quarters.
   faers_quarters: []
+
+  # Drug characterizations treated as causally implicated in the event, and so
+  # eligible for the drug-reaction bridge and disproportionality analysis.
+  # FAERS 1 (suspect) and 3 (interacting) are both causal attributions; 2
+  # (concomitant) is what the patient happened to also be taking. Kept as a var
+  # so the signal mart can be re-run on suspect alone without a code change.
+  implicated_drug_roles: ['suspect', 'interacting']
+
+  # Evans criteria for calling a drug-reaction pair a signal: at least three
+  # co-reported cases, PRR at or above 2, and a Yates-corrected chi-square at
+  # or above 4. The conventional first-pass screen in FAERS literature.
+  signal_min_cases: 3
+  signal_min_prr: 2
+  signal_min_chi2: 4

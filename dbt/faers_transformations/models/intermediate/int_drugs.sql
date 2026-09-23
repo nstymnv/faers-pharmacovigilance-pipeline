@@ -2,7 +2,7 @@
 -- per distinct product.
 --
 -- A FAERS report lists a drug once per administered dose: report 12610564 carries
--- 108 AFSTYLA entries, each with its own dose and start date. Those entries are
+-- 100 AFSTYLA entries, each with its own dose and start date. Those entries are
 -- kept here so the dosing detail survives into the warehouse. Collapsing them to
 -- one row per product happens in the marts, where counting distinct reports per
 -- drug is what stops a single patient's treatment diary from outweighing a drug

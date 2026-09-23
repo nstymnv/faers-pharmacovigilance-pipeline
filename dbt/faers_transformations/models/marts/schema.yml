@@ -1,0 +1,581 @@
+version: 2
+
+models:
+
+  # --------------------------------------------------------------- dimensions
+
+  - name: dim_date
+    description: >
+      Calendar dimension, one row per day across whole years spanning the report
+      dates loaded, plus a 'Not reported' member keyed -1. Role-playing: report
+      receipt and transmission both key against it. Month and year_month are
+      present but unreliable for drug dates, which are padded from partial
+      precision — aggregate at quarter or year.
+    columns:
+      - name: date_key
+        description: Surrogate key, YYYYMMDD as an integer. -1 is the unknown member.
+        data_tests: [not_null, unique]
+      - name: date_day
+        description: The calendar date. Null on the unknown member.
+      - name: year
+        description: Calendar year.
+      - name: quarter
+        description: Calendar quarter, 1-4.
+      - name: year_quarter
+        description: Sortable quarter label, e.g. 2020Q1. The grain of every agg_ model.
+      - name: month
+        description: Calendar month number.
+      - name: month_name
+        description: Month name.
+      - name: year_month
+        description: >
+          Sortable month label. Safe for report dates, misleading for drug
+          dates: 81,428 drug start dates are year-only and all land in January.
+
+  - name: dim_drug
+    description: >
+      One row per (active_substance, medicinal_product) pair, plus a
+      'Not reported' member keyed '-1'. No brand-to-generic resolution and no
+      spelling-variant dedupe: "NEXIUM" and "NEXIUM 40MG" are separate rows.
+      That is the largest single limit on any "which drugs" answer here.
+    columns:
+      - name: drug_key
+        description: Surrogate key over medicinal_product and active_substance.
+        data_tests: [not_null, unique]
+      - name: medicinal_product
+        description: Product name as reported, uppercased in staging.
+      - name: active_substance
+        description: Active substance as reported, uppercased in staging.
+
+  - name: dim_reaction
+    description: >
+      One row per MedDRA preferred term, plus a 'Not reported' member keyed
+      '-1', carrying this project's custom reaction grouping.
+    columns:
+      - name: reaction_key
+        description: Surrogate key over the reaction term.
+        data_tests: [not_null, unique]
+      - name: reaction
+        description: MedDRA preferred term, title-cased in staging.
+      - name: custom_reaction_group
+        description: Project-defined grouping key from the custom_reaction_groups_mapping seed. Not a FAERS field.
+      - name: custom_reaction_group_label
+        description: Display label for custom_reaction_group.
+      - name: custom_reaction_group_basis
+        description: >
+          'rule' where an explicit mapping rule assigned the group, 'fallback'
+          where it landed in a catch-all. A grouped view that hides this
+          presents a guess as a finding.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["rule", "fallback"]
+              config:
+                where: "reaction_key <> '-1'"
+
+  - name: dim_country
+    description: >
+      One row per ISO country code, built from the country_mapping seed rather
+      than from observed reports so the dimension is stable across loads, plus a
+      'Not reported' member keyed '-1'. Role-playing: source country and
+      occurrence country both key against it.
+    columns:
+      - name: country_key
+        description: Surrogate key over country_code and country_name.
+        data_tests: [not_null, unique]
+      - name: country_code
+        description: ISO country code.
+      - name: country_name
+        description: Readable country name.
+
+  # -------------------------------------------------------------------- facts
+
+  - name: fct_report
+    description: >
+      One row per FAERS report — the spine of the star. int_reports left joined
+      to int_demographics. Seriousness criteria are total booleans and can be
+      summed directly. Excludes FDA-retracted reports and reports dropped by the
+      staging filters, so every "share of" metric built here is over that
+      filtered population.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          arguments:
+            compare_model: ref('int_reports')
+    columns:
+      - name: report_id
+        description: FAERS report identifier. Degenerate dimension — drill through to int_reports for the identifiers and version history not carried here.
+        data_tests: [not_null, unique]
+      - name: receipt_date_key
+        description: FK to dim_date. The date FDA received the latest report information, and the active date relationship for BI.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: transmission_date_key
+        description: FK to dim_date. The date the report was transmitted.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: source_country_key
+        description: FK to dim_country. Where the report was filed. '-1' where unreported — 16,732 reports in 2020q1.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: country_key
+      - name: occurrence_country_key
+        description: FK to dim_country. Where the event occurred.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: country_key
+      - name: is_serious
+        description: Whether the event was serious. Staging drops reports with no seriousness value, so this is never null.
+        data_tests: [not_null]
+      - name: congenital_anomaly
+        description: "Seriousness criterion: congenital anomaly. Total boolean — absent means false, so it sums and averages directly."
+      - name: death
+        description: "Seriousness criterion: death. Total boolean."
+      - name: disabling
+        description: "Seriousness criterion: disabling. Total boolean."
+      - name: hospitalization
+        description: "Seriousness criterion: hospitalization. Total boolean."
+      - name: lifethreatening
+        description: "Seriousness criterion: life-threatening. Total boolean."
+      - name: other_serious
+        description: "Seriousness criterion: other. Total boolean."
+      - name: seriousness_criteria_count
+        description: The six seriousness criteria summed, 0-6. A single sortable measure of case severity.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 6
+      - name: is_expedited
+        description: Whether the report met FDA's expedited-reporting criteria.
+      - name: report_type
+        description: How the report reached FDA (spontaneous / report from study / other / not available to sender).
+      - name: age_group
+        description: Reported patient age group. Null where unreported.
+      - name: sex
+        description: Reported patient sex. Null where unreported, which is distinct from the reported value 'unknown'.
+      - name: onset_age_years
+        description: >
+          Patient age at onset, normalized to years from the reported value and
+          unit. Null where the unit is not a duration, or where the result falls
+          outside 0-120 years — 2020q1 carries onset ages down to -5. Raw values
+          remain in int_demographics.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 120
+      - name: weight_kg
+        description: Reported patient weight in kilograms.
+
+  - name: fct_report_drug
+    description: >
+      One row per (report_id, drug_key) — the counting fact for every drug
+      question. Dose entries from int_drugs are collapsed here, so counting
+      distinct reports on this table is correct where counting rows on int_drugs
+      is not. Dose, route, indication and dechallenge stay in int_drugs.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_id, drug_key]
+      - dbt_utils.fewer_rows_than:
+          arguments:
+            compare_model: ref('int_drugs')
+    columns:
+      - name: report_id
+        description: FAERS report identifier.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_report')
+                field: report_id
+      - name: drug_key
+        description: FK to dim_drug.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drug')
+                field: drug_key
+      - name: drug_role
+        description: >
+          Strongest role this product held on this report — suspect outranks
+          interacting outranks concomitant, because a product named suspect even
+          once is a suspect drug for the case.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["suspect", "interacting", "concomitant"]
+      - name: is_implicated
+        description: >
+          Whether drug_role is one of the causally attributed roles set by the
+          implicated_drug_roles var (suspect, interacting). Concomitant drugs are
+          what the patient also happened to be taking. Gates the bridge and all
+          disproportionality analysis.
+        data_tests: [not_null]
+      - name: entry_count
+        description: >
+          How many dose entries collapsed into this row — 100 for AFSTYLA on
+          report 12610564. Keeps treatment diaries visible rather than hidden.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+      - name: first_start_date
+        description: >
+          Earliest plausible treatment start across the collapsed entries. Null
+          for most rows — 64% of drug entries carry no start date. Dates outside
+          1900-today are excluded as typos. Padded from partial precision, so
+          not usable at month or day grain.
+      - name: last_end_date
+        description: Latest plausible treatment end across the collapsed entries. Same caveats as first_start_date.
+      - name: receipt_date_key
+        description: FK to dim_date, denormalized from fct_report because every drug trend groups by quarter.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+
+  - name: fct_report_reaction
+    description: >
+      One row per (report_id, reaction_key). A factless fact table: the row's
+      existence is the fact, so you count rows. Conflicting outcomes for one
+      reaction were resolved upstream to the most clinically severe.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_id, reaction_key]
+      - dbt_utils.equal_rowcount:
+          arguments:
+            compare_model: ref('int_reactions')
+    columns:
+      - name: report_id
+        description: FAERS report identifier.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_report')
+                field: report_id
+      - name: reaction_key
+        description: FK to dim_reaction.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_reaction')
+                field: reaction_key
+      - name: outcome
+        description: Outcome of this reaction. Where a report gave conflicting outcomes, the most severe survived.
+      - name: outcome_severity_rank
+        description: Clinical severity rank behind that resolution, 6 = fatal down to 1 = unknown, 0 = not reported.
+      - name: is_fatal
+        description: Whether the resolved outcome is fatal.
+      - name: meddra_version
+        description: MedDRA version this term was coded under. Not part of the key — keying on it used to double-count re-coded reactions.
+      - name: receipt_date_key
+        description: FK to dim_date, denormalized from fct_report.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+
+  - name: brg_drug_reaction
+    description: >
+      One row per (report_id, drug_key, reaction_key) for implicated drugs only.
+      A deliberate N x M cross product within each report: FAERS never records
+      which drug caused which reaction, so every implicated drug is paired with
+      every reaction and disproportionality analysis sorts out which pairings
+      exceed chance. Summing report counts across drugs double-counts reports by
+      construction — only per-pair counts are meaningful.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [report_id, drug_key, reaction_key]
+    columns:
+      - name: report_id
+        description: FAERS report identifier.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_report')
+                field: report_id
+      - name: drug_key
+        description: FK to dim_drug.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drug')
+                field: drug_key
+      - name: reaction_key
+        description: FK to dim_reaction.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_reaction')
+                field: reaction_key
+      - name: receipt_date_key
+        description: FK to dim_date.
+        data_tests:
+          - not_null
+
+  # ------------------------------------------------------- signal & aggregates
+
+  - name: mart_drug_reaction_signal
+    description: >
+      One row per co-reported (drug_key, reaction_key) pair, with the 2x2
+      contingency table and PRR, ROR, Yates chi-square and 95% confidence
+      intervals. A screening statistic, not evidence of causation: FDA itself
+      uses Bayesian shrinkage (EBGM), which is far less prone to flagging on
+      three cases. 69% of pairs with a >= 3 flag under Evans on a single
+      quarter, so rank by chi-square or the PRR lower bound rather than
+      filtering on is_signal alone.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [drug_key, reaction_key]
+    columns:
+      - name: drug_key
+        description: FK to dim_drug.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drug')
+                field: drug_key
+      - name: reaction_key
+        description: FK to dim_reaction.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_reaction')
+                field: reaction_key
+      - name: a
+        description: "Reports with this drug AND this reaction. Distinct reports, never bridge rows."
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+      - name: b
+        description: "Reports with this drug but NOT this reaction."
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: c
+        description: "Reports with this reaction but NOT this drug."
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: d
+        description: "Reports with neither."
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: n_total
+        description: >
+          Size of the universe: every report carrying at least one implicated
+          drug. Not all reports, and not only reports for this drug — including
+          reports with no implicated drug would inflate d for every pair.
+        data_tests: [not_null]
+      - name: prr
+        description: >
+          Proportional Reporting Ratio, computed on Haldane-Anscombe corrected
+          cells (each + 0.5) so it stays defined when c is zero — the shape of a
+          reaction only ever reported with this drug.
+      - name: prr_lower_95
+        description: Lower bound of the 95% CI for PRR.
+      - name: prr_upper_95
+        description: Upper bound of the 95% CI for PRR.
+      - name: ror
+        description: Reporting Odds Ratio, on the same corrected cells.
+      - name: ror_lower_95
+        description: Lower bound of the 95% CI for ROR. Above 1 is the EMA signal convention.
+      - name: ror_upper_95
+        description: Upper bound of the 95% CI for ROR.
+      - name: chi2_yates
+        description: Chi-square with Yates' continuity correction, on the uncorrected cells.
+      - name: is_signal
+        description: >
+          Evans criteria: a >= signal_min_cases AND prr >= signal_min_prr AND
+          chi2_yates >= signal_min_chi2, all dbt vars. A pair failing this is not
+          "safe" — it is "too few reports to say".
+        data_tests: [not_null]
+
+  - name: agg_drug_quarterly_trend
+    description: >
+      One row per (drug_key, year_quarter). Counts are distinct reports and are
+      additive across quarters, because a report falls in exactly one quarter.
+      Answers the drug reporting-trend and expedited-frequency questions.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [drug_key, year_quarter]
+    columns:
+      - name: drug_key
+        description: FK to dim_drug.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drug')
+                field: drug_key
+      - name: year_quarter
+        description: Quarter of the report receipt date.
+        data_tests: [not_null]
+      - name: report_count
+        description: Distinct reports mentioning this drug in any role.
+      - name: implicated_report_count
+        description: Distinct reports where the drug was suspect or interacting, as opposed to merely concomitant.
+      - name: serious_report_count
+        description: Distinct reports mentioning this drug that were serious.
+      - name: expedited_report_count
+        description: Distinct reports mentioning this drug that met expedited criteria.
+      - name: distinct_reaction_count
+        description: Distinct reactions reported on cases mentioning this drug, in any role.
+
+  - name: agg_reaction_frequency
+    description: >
+      One row per (reaction_key, year_quarter). Answers the reaction-frequency
+      and reaction-trend questions, and carries the expedited count so
+      "what reactions appear in expedited cases" is answerable here too.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [reaction_key, year_quarter]
+    columns:
+      - name: reaction_key
+        description: FK to dim_reaction.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_reaction')
+                field: reaction_key
+      - name: year_quarter
+        description: Quarter of the report receipt date.
+        data_tests: [not_null]
+      - name: report_count
+        description: Distinct reports carrying this reaction.
+      - name: fatal_report_count
+        description: Distinct reports where this reaction's resolved outcome was fatal.
+      - name: serious_report_count
+        description: Distinct serious reports carrying this reaction.
+      - name: expedited_report_count
+        description: Distinct expedited reports carrying this reaction.
+
+  - name: agg_outcome_trend
+    description: >
+      One row per (outcome, year_quarter). reaction_count and report_count both
+      appear and differ: one report can carry several reactions that resolved
+      differently, so summing report_count across outcomes double-counts reports
+      on purpose — the question is about outcomes, not cases.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [outcome, year_quarter]
+    columns:
+      - name: outcome
+        description: Resolved reaction outcome, or 'Not reported'.
+        data_tests: [not_null]
+      - name: year_quarter
+        description: Quarter of the report receipt date.
+        data_tests: [not_null]
+      - name: outcome_severity_rank
+        description: Clinical severity rank for this outcome, for ordering.
+      - name: reaction_count
+        description: Reaction rows with this outcome.
+      - name: report_count
+        description: Distinct reports carrying at least one reaction with this outcome.
+
+  - name: agg_expedited_drug_profile
+    description: >
+      One row per (drug_key, year_quarter), carrying the expedited share next to
+      its own denominator. The counts duplicate agg_drug_quarterly_trend by
+      design and a singular test asserts the two agree. expedited_share is NOT
+      additive: roll quarters up by summing the counts and dividing again, never
+      by averaging shares.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [drug_key, year_quarter]
+    columns:
+      - name: drug_key
+        description: FK to dim_drug.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_drug')
+                field: drug_key
+      - name: year_quarter
+        description: Quarter of the report receipt date.
+        data_tests: [not_null]
+      - name: report_count
+        description: Distinct reports mentioning this drug, over the staging-filtered, retraction-excluded population.
+      - name: expedited_report_count
+        description: Distinct reports mentioning this drug that met expedited criteria.
+      - name: expedited_share
+        description: expedited_report_count / report_count. Non-additive.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+
+  - name: agg_patient_group_profile
+    description: >
+      One row per (age_group, sex, year_quarter). Answers the demographic
+      questions. Reading these as rates needs a population denominator FAERS
+      does not provide — compare shares between expedited and all reports rather
+      than absolute counts.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [age_group, sex, year_quarter]
+    columns:
+      - name: age_group
+        description: Reported age group, or 'Not reported'.
+        data_tests: [not_null]
+      - name: sex
+        description: >
+          Reported sex, or 'Not reported'. Distinct from the reported value
+          'unknown', which is a sender explicitly stating the sex is not known.
+        data_tests: [not_null]
+      - name: year_quarter
+        description: Quarter of the report receipt date.
+        data_tests: [not_null]
+      - name: report_count
+        description: Reports in this group.
+      - name: expedited_report_count
+        description: Reports in this group that met expedited criteria.
+      - name: serious_report_count
+        description: Serious reports in this group.
+      - name: death_report_count
+        description: Reports in this group meeting the death seriousness criterion.
+      - name: mean_onset_age_years
+        description: Mean normalized onset age, over rows where it could be normalized.

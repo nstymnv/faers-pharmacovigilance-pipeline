@@ -29,6 +29,76 @@ rather than the all-caps style used in the one-time `sql/` bootstrap scripts.
 Those bootstrap scripts are idempotent `CREATE ... IF NOT EXISTS` statements
 and don't need to be rewritten just to match this convention.
 
+## The marts layer
+
+`models/marts/` is a star schema: four dimensions, three facts, a bridge, a
+disproportionality mart and five BI aggregates.
+
+```
+dim_date  dim_country          dim_drug        dim_reaction
+      \      /                     |                |
+      fct_report ──┬── fct_report_drug ──┐      ┌────┘
+                   └── fct_report_reaction ── brg_drug_reaction
+                                                    │
+                                        mart_drug_reaction_signal
+```
+
+Four rules govern everything in it.
+
+**1. Count distinct reports, never rows.** `int_drugs` is one row per dose
+entry, so `fct_report_drug` collapses it to one row per (report, product) and
+publishes `entry_count`. A `count(*)` against the wrong table lets one patient's
+treatment diary outrank a drug reported by a hundred people. Section 4 above is
+the long version.
+
+**2. The bridge is an intentional cross product.** `brg_drug_reaction` pairs
+every implicated drug on a report with every reaction on it, because FAERS never
+records which drug caused which reaction. Summing report counts across drugs
+therefore double-counts reports by construction — only per-pair counts mean
+anything. Which roles count as implicated is the `implicated_drug_roles` var
+(suspect and interacting, not concomitant).
+
+**3. Aggregate at quarter or year, never month.** Every `agg_` model is keyed on
+`year_quarter` from the report receipt date. A report has one receipt date, so
+it falls in exactly one quarter and the counts stay additive; drug dates are
+padded from partial precision and are not safe at month grain (see Date quality
+below).
+
+**4. Every dimension has a `'Not reported'` member keyed `-1`,** and facts point
+at it rather than carrying a null foreign key. Without it a Power BI
+relationship silently drops the 16,732 reports with no source country out of
+every country-sliced visual.
+
+### Surrogate keys
+
+`dim_drug`, `dim_reaction` and `dim_country` key on
+`dbt_utils.generate_surrogate_key` hashes of their natural keys; `dim_date` uses
+`YYYYMMDD` as an integer. A fact builds the same hash from the same columns in
+the same order — change one and both sides must change together, or the
+`relationships` tests fail loudly, which is the intended failure mode.
+
+### Disproportionality
+
+`mart_drug_reaction_signal` publishes the raw 2x2 cells alongside PRR, ROR,
+Yates chi-square and 95% confidence intervals. Three things worth knowing before
+quoting a number from it:
+
+- PRR and ROR are computed on Haldane-Anscombe corrected cells (each `+ 0.5`).
+  Without the correction both are undefined when `c = 0`, which is exactly the
+  shape of a reaction only ever reported with one drug — the most interesting
+  pattern the screen finds. The uncorrected cells stay as columns.
+- The arithmetic runs in `float`, not Snowflake's default fixed-point `NUMBER`.
+  Fixed-point division caps the result scale and truncated the small ratio
+  `c/(c+d)`, throwing the PRR off by 0.06% at `a = 182` and worse as the
+  reaction gets rarer.
+- `is_signal` is the Evans screen, and on one quarter it flags 69% of pairs with
+  `a >= 3`. That is expected for raw disproportionality without Bayesian
+  shrinkage — it is a triage filter, not a finding. Rank by chi-square or the
+  PRR lower bound.
+
+A dbt unit test checks all of this against a hand-computed ten-report fixture,
+including a zero-cell pair.
+
 ## Duplicate and retraction policy
 
 FAERS contains four different things that all get loosely called "duplicates".
@@ -88,8 +158,9 @@ var — narrowing it would let a dev build keep reports FDA has withdrawn.
 ### 4. Repeated drug entries — kept here, collapsed in the marts
 
 A report lists a drug **once per administered dose**, not once per product.
-Report 12610564 carries 108 `AFSTYLA` entries, each with its own dose and start
-date; report 15656224 carries ~170 `NEXIUM` entries. These are treatment
+Report 12610564 carries 100 `AFSTYLA ANTIHEMOPHILIC FACTOR (RECOMBINANT)` entries,
+each with its own dose and start date; report 15656224 carries 87 `NEXIUM`
+entries, and report 16538673 100 `IDELVION`. These are treatment
 diaries, not data-entry errors.
 
 `int_drugs` keeps every entry, keyed `(report_id, drug_index)`, so dose amounts,

@@ -12,7 +12,7 @@ normalized as (
         {{ faers_to_date('transmissiondate') }} as transmission_date,
         primarysourcecountry as source_country,
         occurcountry as occurrence_country,
-        reporttype as report_type,
+        try_cast(reporttype as int) as report_type,
         try_cast(serious as int) as serious,
         try_cast(seriousnesscongenitalanomali as int) as congenital_anomaly,
         try_cast(seriousnessdeath as int) as death,
@@ -41,7 +41,15 @@ standardized as (
         transmission_date,
         source_country,
         occurrence_country,
-        report_type,
+        case
+            when report_type = 1 then 'spontaneous'
+            when report_type = 2 then 'report from study'
+            when report_type = 3 then 'other'
+            -- 4 is "not available to sender", i.e. the sender knows the report
+            -- type is unknown. Distinct from null, which is the element being
+            -- absent altogether, so it keeps its own decoded value.
+            when report_type = 4 then 'not available to sender'
+        end as report_type,
         case
             when serious = 1 then 'yes'
             when serious = 2 then 'no'
