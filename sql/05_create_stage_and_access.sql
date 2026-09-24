@@ -26,8 +26,11 @@ MODE = EGRESS
 TYPE = HOST_PORT
 VALUE_LIST = ('fis.fda.gov:443');
 
--- One row per attempted quarter ingest. Drives idempotency (a quarter already
--- SUCCEEDED is skipped) and tells the Airflow DAG what still needs loading.
+-- One row per attempt at a quarter, for two kinds of attempt. The ingestion
+-- procedure logs staging as SUCCEEDED / FAILED, and a quarter already SUCCEEDED
+-- is not re-downloaded. The load step (faers_ingestion.main) logs LOADED /
+-- LOAD_FAILED, and the Airflow DAG treats a quarter as pending until it is
+-- LOADED.
 CREATE TABLE IF NOT EXISTS INGESTION_LOG (
     QUARTER_KEY STRING NOT NULL,
     SOURCE_URL STRING,

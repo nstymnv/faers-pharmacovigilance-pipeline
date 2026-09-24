@@ -11,10 +11,18 @@ import argparse
 import logging
 import re
 import time
+from datetime import datetime, timezone
 
 import snowflake.connector
 
-from faers_ingestion.config import build_connection_parameters, stage_xml_prefix
+from faers_ingestion.config import (
+    INGESTION_LOG_TABLE,
+    LOAD_FAILED_STATUS,
+    LOAD_SUCCEEDED_STATUS,
+    build_connection_parameters,
+    quarter_key,
+    stage_xml_prefix,
+)
 from faers_ingestion.extract.scanner import extract_data
 from faers_ingestion.extract.spark import create_spark
 from faers_ingestion.load.deleted_cases import load_deleted_cases
@@ -61,14 +69,43 @@ def ingest_quarter(year: int, quarter: int, force: bool) -> None:
     logger.info("staged %sq%s: %s", year, quarter, result)
 
 
+def record_load(
+    year: int,
+    quarter: int,
+    status: str,
+    started_at: datetime,
+    error_message: str | None = None,
+) -> None:
+    """Log a load attempt next to the procedure's staging rows in INGESTION_LOG.
+
+    Staging and loading fail independently: a quarter can be staged and then fail
+    to parse. Logging the load separately is what lets the Airflow DAG retry that
+    quarter instead of treating a successful download as a finished quarter.
+    """
+    with snowflake.connector.connect(**build_connection_parameters()) as conn:
+        conn.cursor().execute(
+            f"insert into {INGESTION_LOG_TABLE}"
+            " (quarter_key, source_url, status, started_at, ended_at, error_message)"
+            " values (%s, %s, %s, %s, %s, %s)",
+            (
+                quarter_key(year, quarter),
+                stage_xml_prefix(year, quarter),
+                status,
+                started_at,
+                datetime.now(timezone.utc),
+                error_message,
+            ),
+        )
+
+
 def load_quarter(spark, year: int, quarter: int) -> dict[str, int]:
     raw_data = extract_data(spark, stage_xml_prefix(year, quarter))
-    quarter_key = f"{year}q{quarter}"
+    key = quarter_key(year, quarter)
 
     counts = {}
     for table_name, extractor in EXTRACTORS.items():
         started = time.time()
-        counts[table_name] = write_quarter(spark, extractor(raw_data), table_name, quarter_key)
+        counts[table_name] = write_quarter(spark, extractor(raw_data), table_name, key)
         logger.info("%s took %.0fs", table_name, time.time() - started)
 
     raw_data.unpersist()
@@ -112,7 +149,14 @@ def main() -> None:
             if args.ingest:
                 ingest_quarter(year, quarter, args.force)
 
-            counts = load_quarter(spark, year, quarter)
+            started_at = datetime.now(timezone.utc)
+            try:
+                counts = load_quarter(spark, year, quarter)
+            except Exception as exc:
+                record_load(year, quarter, LOAD_FAILED_STATUS, started_at, str(exc)[:1000])
+                raise
+
+            record_load(year, quarter, LOAD_SUCCEEDED_STATUS, started_at)
             logger.info("%sq%s loaded: %s", year, quarter, counts)
     finally:
         # Explicit rather than left to process exit: under Airflow the worker
