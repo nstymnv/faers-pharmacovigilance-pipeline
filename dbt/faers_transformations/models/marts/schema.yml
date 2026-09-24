@@ -6,8 +6,9 @@ models:
 
   - name: dim_date
     description: >
-      Calendar dimension, one row per day across whole years spanning the report
-      dates loaded, plus a 'Not reported' member keyed -1. Role-playing: report
+      Calendar dimension, one row per day across whole years spanning the
+      receipt dates in fct_report (so it follows the analysis window), plus a
+      'Not reported' member keyed -1. Role-playing: report
       receipt and transmission both key against it. Month and year_month are
       present but unreliable for drug dates, which are padded from partial
       precision — aggregate at quarter or year.
@@ -96,11 +97,10 @@ models:
       to int_demographics. Seriousness criteria are total booleans and can be
       summed directly. Excludes FDA-retracted reports and reports dropped by the
       staging filters, so every "share of" metric built here is over that
-      filtered population.
-    data_tests:
-      - dbt_utils.equal_rowcount:
-          arguments:
-            compare_model: ref('int_reports')
+      filtered population. Restricted to reports published within the analysis
+      window (vars mart_start_quarter..mart_end_quarter), which windows every
+      mart built on it; the window is lifted while the faers_quarters dev slice
+      is set.
     columns:
       - name: report_id
         description: FAERS report identifier. Degenerate dimension — drill through to int_reports for the identifiers and version history not carried here.
@@ -261,9 +261,6 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [report_id, reaction_key]
-      - dbt_utils.equal_rowcount:
-          arguments:
-            compare_model: ref('int_reactions')
     columns:
       - name: report_id
         description: FAERS report identifier.

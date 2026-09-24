@@ -25,7 +25,8 @@ normalized as (
         duplicatenumb as duplicate_numb,
         duplicatesource as duplicate_source,
         authoritynumb as authority_number,
-        companynumb as company_number
+        companynumb as company_number,
+        source_quarter
     from source
     where
         {{ faers_quarter_filter() }}
@@ -72,7 +73,8 @@ standardized as (
         duplicate_numb,
         duplicate_source,
         authority_number,
-        company_number
+        company_number,
+        source_quarter
     from normalized
 ),
 

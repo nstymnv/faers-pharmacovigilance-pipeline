@@ -1,3 +1,9 @@
+-- Run as the pipeline's working role (the one in SNOWFLAKE_ROLE). Everything
+-- here is owned by that role except the external access integration, which
+-- needs account-level CREATE INTEGRATION and so is the only statement run as
+-- ACCOUNTADMIN, at the end of the script.
+SET WORKING_ROLE = CURRENT_ROLE();
+
 USE DATABASE FAERS_DB;
 USE SCHEMA EXTRACTION;
 
@@ -20,10 +26,6 @@ MODE = EGRESS
 TYPE = HOST_PORT
 VALUE_LIST = ('fis.fda.gov:443');
 
-CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION FDA_FAERS_ACCESS
-ALLOWED_NETWORK_RULES = (FDA_FAERS_RULE)
-ENABLED = TRUE;
-
 -- One row per attempted quarter ingest. Drives idempotency (a quarter already
 -- SUCCEEDED is skipped) and tells the Airflow DAG what still needs loading.
 CREATE TABLE IF NOT EXISTS INGESTION_LOG (
@@ -36,3 +38,15 @@ CREATE TABLE IF NOT EXISTS INGESTION_LOG (
     ENDED_AT TIMESTAMP_LTZ,
     ERROR_MESSAGE STRING
 );
+
+-- Integrations are account-level objects, so creating one needs ACCOUNTADMIN.
+-- The working role only needs USAGE to attach it to the ingestion procedure.
+USE ROLE ACCOUNTADMIN;
+
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION FDA_FAERS_ACCESS
+ALLOWED_NETWORK_RULES = (FAERS_DB.EXTRACTION.FDA_FAERS_RULE)
+ENABLED = TRUE;
+
+GRANT USAGE ON INTEGRATION FDA_FAERS_ACCESS TO ROLE IDENTIFIER($WORKING_ROLE);
+
+USE ROLE IDENTIFIER($WORKING_ROLE);

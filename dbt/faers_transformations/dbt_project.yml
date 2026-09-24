@@ -52,6 +52,13 @@ vars:
   # have to be rebuilt to test a model change. An empty list means all quarters.
   faers_quarters: []
 
+  # Analysis window the marts report on: five full calendar years, so trends
+  # compare whole years. Quarters outside it (2020q1, the dev slice, and new
+  # quarters once they are published) stay in RAW, staging and intermediate.
+  # Ignored while faers_quarters is set; see faers_mart_window_filter.
+  mart_start_quarter: '2021q1'
+  mart_end_quarter: '2025q4'
+
   # Drug characterizations treated as causally implicated in the event, and so
   # eligible for the drug-reaction bridge and disproportionality analysis.
   # FAERS 1 (suspect) and 3 (interacting) are both causal attributions; 2

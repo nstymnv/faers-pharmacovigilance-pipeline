@@ -14,9 +14,14 @@
 -- Denominator caveat: stg_reports drops reports with no seriousness value, and
 -- FDA-retracted reports are excluded upstream, so every "share of" metric built
 -- on this table is computed over that filtered population.
+--
+-- This is the only mart that reads int_reports, and every other fact reaches
+-- its reports through an inner join to it, so the analysis-window filter here
+-- windows the whole star.
 with reports as (
 
     select * from {{ ref('int_reports') }}
+    where {{ faers_mart_window_filter() }}
 
 ),
 

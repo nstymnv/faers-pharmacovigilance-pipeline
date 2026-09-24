@@ -207,7 +207,16 @@ models:
               config:
                 severity: warn
       - name: custom_reaction_group
-        description: "Internal grouping key for the reaction, from the custom_reaction_groups_mapping seed (a project-defined MedDRA-derived grouping, not a FAERS field)."
+        description: "Internal grouping key for the reaction, from the custom_reaction_groups_mapping seed (a project-defined MedDRA-derived grouping, not a FAERS field). Null for a term the seed does not cover yet."
+        data_tests:
+          # The seed was classified by hand from 2020q1's terms, so every newly
+          # loaded quarter can bring terms it has never seen. A warning rather
+          # than an error: the term is still usable ungrouped, and the fix is
+          # to classify it and append it to the seed (see
+          # analyses/unmapped_reaction_terms.sql).
+          - not_null:
+              config:
+                severity: warn
       - name: custom_reaction_group_label
         description: "Human-readable label for custom_reaction_group, from the custom_reaction_groups_mapping seed."
       - name: custom_reaction_group_basis
@@ -331,6 +340,10 @@ models:
         description: "Regulatory authority's case number for the report (FAERS authoritynumb)."
       - name: company_number
         description: "Reporting company's internal case number for the report (FAERS companynumb)."
+      - name: source_quarter
+        description: "FAERS quarter this report version was loaded from, e.g. 2020q1. Carried so int_reports can record the span of quarters a report was published in."
+        data_tests:
+          - not_null
 
   - name: stg_deleted_cases
     description: >

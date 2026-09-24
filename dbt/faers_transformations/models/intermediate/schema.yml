@@ -18,6 +18,19 @@ models:
       - name: version
         description: Latest version of the FAERS report.
 
+      - name: first_seen_quarter
+        description: >
+          Earliest FAERS quarter (e.g. 2020q1) any version of the report was
+          published in. With last_seen_quarter, the span the marts' analysis
+          window is checked against.
+        data_tests:
+          - not_null
+
+      - name: last_seen_quarter
+        description: Latest FAERS quarter any version of the report was published in.
+        data_tests:
+          - not_null
+
       - name: receipt_date
         description: Date the latest report information was received.
 
