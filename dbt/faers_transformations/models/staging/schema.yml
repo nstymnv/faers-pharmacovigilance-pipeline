@@ -176,6 +176,10 @@ models:
                 values: ["yes", "no", "doesn''t Apply"]
               config:
                 severity: warn
+      - name: source_quarter
+        description: "FAERS quarter this drug entry was loaded from, e.g. 2021q4. Lets int_drugs keep one publication of a report version that FDA republished in a later quarter."
+        data_tests:
+          - not_null
 
   - name: stg_reaction
     description: "Model for cleaning and transforming the FAERS reaction data"

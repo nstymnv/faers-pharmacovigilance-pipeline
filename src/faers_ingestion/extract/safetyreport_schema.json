@@ -79,7 +79,7 @@
                   },
                   {
                     "name": "drugauthorizationnumb",
-                    "type": "long",
+                    "type": "string",
                     "nullable": true,
                     "metadata": {}
                   },
@@ -145,7 +145,7 @@
                   },
                   {
                     "name": "drugintervaldosageunitnumb",
-                    "type": "long",
+                    "type": "double",
                     "nullable": true,
                     "metadata": {}
                   },
@@ -167,6 +167,12 @@
                             "type": "string",
                             "nullable": true,
                             "metadata": {}
+                          },
+                          {
+                            "name": "drugrecuractionmeddraversion",
+                            "type": "double",
+                            "nullable": true,
+                            "metadata": {}
                           }
                         ]
                       },
@@ -177,7 +183,7 @@
                   },
                   {
                     "name": "drugseparatedosagenumb",
-                    "type": "long",
+                    "type": "double",
                     "nullable": true,
                     "metadata": {}
                   },

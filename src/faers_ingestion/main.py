@@ -24,6 +24,7 @@ from faers_ingestion.config import (
     stage_xml_prefix,
 )
 from faers_ingestion.extract.scanner import extract_data
+from faers_ingestion.extract.schema_drift import mistyped_values, unknown_elements
 from faers_ingestion.extract.spark import create_spark
 from faers_ingestion.load.deleted_cases import load_deleted_cases
 from faers_ingestion.load.loader import write_quarter
@@ -99,8 +100,20 @@ def record_load(
 
 
 def load_quarter(spark, year: int, quarter: int) -> dict[str, int]:
-    raw_data = extract_data(spark, stage_xml_prefix(year, quarter))
     key = quarter_key(year, quarter)
+
+    # Checked before any table is touched: schema drift otherwise surfaces only
+    # after REPORTS has been replaced, as an error naming an unrelated column.
+    with snowflake.connector.connect(**build_connection_parameters()) as conn:
+        drift = [f"new element {name}" for name in unknown_elements(conn, year, quarter)]
+        drift += mistyped_values(conn, year, quarter)
+    if drift:
+        raise RuntimeError(
+            f"{key} does not fit extract/safetyreport_schema.json: {'; '.join(drift)}. "
+            "Add or retype those fields in the schema and load the quarter again."
+        )
+
+    raw_data = extract_data(spark, stage_xml_prefix(year, quarter))
 
     counts = {}
     for table_name, extractor in EXTRACTORS.items():

@@ -18,10 +18,17 @@ with latest_version as (
     -- version's drug list whole, rather than resolving each index across
     -- versions, keeps the list internally consistent — a later version
     -- supersedes the entire drug list of the one before it.
+    --
+    -- FDA occasionally republishes the same version in a later quarter (25
+    -- report versions across 2020q1-2022q4), which would bring the list in
+    -- twice. The most recent publication wins, as it does in int_reports.
     select *
     from {{ ref('stg_drugs') }}
 
-    qualify version = max(version) over (partition by report_id)
+    qualify dense_rank() over (
+        partition by report_id
+        order by version desc, source_quarter desc
+    ) = 1
 
 )
 

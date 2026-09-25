@@ -34,7 +34,8 @@ normalized as (
         -- collapses the drugrecurrence explosion back to one row per drug
         drugrecuraction as recurrence_action,
         cast(actiondrug as int) as taken_action,
-        cast(drugadditional as int) as use_stopped_reduced
+        cast(drugadditional as int) as use_stopped_reduced,
+        source_quarter
 
     from source
     where
@@ -86,7 +87,8 @@ standardized as (
             when use_stopped_reduced = 1 then 'yes'
             when use_stopped_reduced = 2 then 'no'
             when use_stopped_reduced = 3 then 'doesn''t Apply'
-        end as use_stopped_reduced
+        end as use_stopped_reduced,
+        source_quarter
     from normalized
 ),
 
