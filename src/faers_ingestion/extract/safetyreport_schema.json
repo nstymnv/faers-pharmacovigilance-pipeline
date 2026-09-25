@@ -67,7 +67,7 @@
                   },
                   {
                     "name": "drugadditional",
-                    "type": "long",
+                    "type": "string",
                     "nullable": true,
                     "metadata": {}
                   },

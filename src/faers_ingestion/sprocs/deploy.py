@@ -22,7 +22,10 @@ create or replace procedure extraction.ingest_faers_quarter(
 returns variant
 language python
 runtime_version = '3.11'
-packages = ('snowflake-snowpark-python', 'requests')
+-- stream-inflate is pure Python from PyPI, for the quarters FDA packed with
+-- Deflate64; the Anaconda channel the other packages come from does not have it.
+artifact_repository = snowflake.snowpark.pypi_shared_repository
+packages = ('snowflake-snowpark-python', 'requests', 'stream-inflate==0.0.43')
 imports = ('@{CODE_STAGE}/{HANDLER_FILE.name}')
 external_access_integrations = (fda_faers_access)
 handler = 'ingest_faers_quarter.run'

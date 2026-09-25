@@ -31,7 +31,9 @@ normalized as (
     where
         {{ faers_quarter_filter() }}
         and safetyreportid is not null
-        and serious is not null
+        -- Reports with no serious value are kept, as unknown seriousness. None
+        -- existed before 2025q4, which has 10,603 (2.8%); dropping them would cut
+        -- valid reports from every count and signal and fake a dip in the trend.
 ),
 
 standardized as (

@@ -11,9 +11,10 @@
 -- belongs. The duplicate_* columns are also withheld because their name invites
 -- exactly the filter that would delete 94% of the data (models/README.md).
 --
--- Denominator caveat: stg_reports drops reports with no seriousness value, and
--- FDA-retracted reports are excluded upstream, so every "share of" metric built
--- on this table is computed over that filtered population.
+-- Denominator caveat: FDA-retracted reports are excluded upstream, so every
+-- "share of" metric built on this table is computed over that filtered
+-- population. is_serious is null where a report gives no seriousness value
+-- (from 2025q4), so a serious share is over reports whose seriousness is known.
 --
 -- This is the only mart that reads int_reports, and every other fact reaches
 -- its reports through an inner join to it, so the analysis-window filter here

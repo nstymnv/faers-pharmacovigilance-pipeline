@@ -8,11 +8,14 @@ the stage one at a time — so peak disk stays around one member rather than the
 
 import os
 import shutil
+import struct
 import time
 import zipfile
+import zlib
 from datetime import datetime, timezone
 
 import requests
+from stream_inflate import stream_inflate64
 
 FAERS_ZIP_URL_TEMPLATE = "https://fis.fda.gov/content/Exports/faers_xml_{year}q{quarter}.zip"
 RAW_STAGE = "@extraction.faers_raw"
@@ -20,6 +23,11 @@ INGESTION_LOG_TABLE = "extraction.ingestion_log"
 
 DOWNLOAD_CHUNK_BYTES = 8 * 1024 * 1024
 REQUEST_TIMEOUT_SECONDS = (30, 300)  # (connect, read)
+
+# ZIP compression method 9. FDA packed some quarters' XML with it (2023q3,
+# 2024q1, 2024q4), and Python's zipfile cannot read it.
+DEFLATE64 = 9
+LOCAL_HEADER_BYTES = 30
 
 
 def _quarter_key(year: int, quarter: int) -> str:
@@ -69,6 +77,43 @@ def _download_zip(url: str, destination: str) -> int:
     return os.path.getsize(destination)
 
 
+def _extract_deflate64(zip_path: str, info: zipfile.ZipInfo, local_path: str) -> None:
+    """Decompress one Deflate64 member with stream-inflate, a pure-Python inflater.
+
+    zipfile still supplies the directory entry; only the member's compressed bytes
+    are read here. The fast C extension for Deflate64 needs an x86 warehouse, and
+    FAERS_WH runs on ARM. Pure Python manages ~6 MB/s, about seven minutes for a
+    quarter, which only the few Deflate64 quarters pay.
+    """
+    with open(zip_path, "rb") as archive, open(local_path, "wb") as target:
+        # The data starts after the member's local header, whose variable-length
+        # name and extra fields can differ from the central directory's copy.
+        archive.seek(info.header_offset)
+        header = archive.read(LOCAL_HEADER_BYTES)
+        name_length, extra_length = struct.unpack("<HH", header[26:30])
+        archive.seek(info.header_offset + LOCAL_HEADER_BYTES + name_length + extra_length)
+
+        def compressed_chunks():
+            remaining = info.compress_size
+            while remaining > 0:
+                chunk = archive.read(min(DOWNLOAD_CHUNK_BYTES, remaining))
+                if not chunk:
+                    raise EOFError(f"{info.filename} is truncated")
+                remaining -= len(chunk)
+                yield chunk
+
+        # stream-inflate does not check the CRC that zipfile would, so it is
+        # checked here to keep a corrupt archive from being staged as valid XML.
+        crc = 0
+        uncompressed_chunks = stream_inflate64()[0]
+        for chunk in uncompressed_chunks(compressed_chunks()):
+            crc = zlib.crc32(chunk, crc)
+            target.write(chunk)
+
+    if crc != info.CRC or os.path.getsize(local_path) != info.file_size:
+        raise ValueError(f"{info.filename} failed its CRC or size check after decompression")
+
+
 def _stage_members(session, zip_path: str, work_dir: str, year: int, quarter: int):
     """Extract XML and deleted-case members one at a time and PUT each to the stage.
 
@@ -97,8 +142,11 @@ def _stage_members(session, zip_path: str, work_dir: str, year: int, quarter: in
             local_name = os.path.basename(info.filename)
             local_path = os.path.join(work_dir, local_name)
 
-            with archive.open(info) as source, open(local_path, "wb") as target:
-                shutil.copyfileobj(source, target, DOWNLOAD_CHUNK_BYTES)
+            if info.compress_type == DEFLATE64:
+                _extract_deflate64(zip_path, info, local_path)
+            else:
+                with archive.open(info) as source, open(local_path, "wb") as target:
+                    shutil.copyfileobj(source, target, DOWNLOAD_CHUNK_BYTES)
 
             # auto_compress=False: Snowpark Connect cannot read compressed XML.
             session.file.put(

@@ -138,8 +138,11 @@ models:
                 to: ref('dim_country')
                 field: country_key
       - name: is_serious
-        description: Whether the event was serious. Staging drops reports with no seriousness value, so this is never null.
-        data_tests: [not_null]
+        description: >
+          Whether the event was serious. Null when the report gives no seriousness
+          value (none before 2025q4; 2.8% of 2025q4). Such reports are counted
+          everywhere else, but serious counts and shares cover only reports whose
+          seriousness is known: count_if and avg skip nulls.
       - name: congenital_anomaly
         description: "Seriousness criterion: congenital anomaly. Total boolean — absent means false, so it sums and averages directly."
       - name: death

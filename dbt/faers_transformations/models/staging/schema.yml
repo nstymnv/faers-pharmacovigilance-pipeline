@@ -297,9 +297,13 @@ models:
               arguments:
                 values: ["spontaneous", "report from study", "other", "not available to sender"]
       - name: serious
-        description: "Indicates whether the adverse event was serious"
+        description: "Indicates whether the adverse event was serious (yes/no). Null when the report does not say, which FAERS allows from 2025q4 on."
         data_tests:
-          - not_null
+          # A warning, not an error: from 2025q4 FAERS sends some reports with no
+          # seriousness value, and they are kept as unknown rather than dropped.
+          - not_null:
+              config:
+                severity: warn
           - accepted_values:
               arguments:
                 values: ["yes", "no"]
