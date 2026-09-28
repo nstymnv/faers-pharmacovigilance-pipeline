@@ -176,6 +176,10 @@ models:
                 values: ["yes", "no", "doesn''t Apply"]
               config:
                 severity: warn
+      - name: source_quarter
+        description: "FAERS quarter this drug entry was loaded from, e.g. 2021q4. Lets int_drugs keep one publication of a report version that FDA republished in a later quarter."
+        data_tests:
+          - not_null
 
   - name: stg_reaction
     description: "Model for cleaning and transforming the FAERS reaction data"
@@ -207,7 +211,16 @@ models:
               config:
                 severity: warn
       - name: custom_reaction_group
-        description: "Internal grouping key for the reaction, from the custom_reaction_groups_mapping seed (a project-defined MedDRA-derived grouping, not a FAERS field)."
+        description: "Internal grouping key for the reaction, from the custom_reaction_groups_mapping seed (a project-defined MedDRA-derived grouping, not a FAERS field). Null for a term the seed does not cover yet."
+        data_tests:
+          # The seed was classified by hand from 2020q1's terms, so every newly
+          # loaded quarter can bring terms it has never seen. A warning rather
+          # than an error: the term is still usable ungrouped, and the fix is
+          # to classify it and append it to the seed (see
+          # analyses/unmapped_reaction_terms.sql).
+          - not_null:
+              config:
+                severity: warn
       - name: custom_reaction_group_label
         description: "Human-readable label for custom_reaction_group, from the custom_reaction_groups_mapping seed."
       - name: custom_reaction_group_basis
@@ -284,9 +297,13 @@ models:
               arguments:
                 values: ["spontaneous", "report from study", "other", "not available to sender"]
       - name: serious
-        description: "Indicates whether the adverse event was serious"
+        description: "Indicates whether the adverse event was serious (yes/no). Null when the report does not say, which FAERS allows from 2025q4 on."
         data_tests:
-          - not_null
+          # A warning, not an error: from 2025q4 FAERS sends some reports with no
+          # seriousness value, and they are kept as unknown rather than dropped.
+          - not_null:
+              config:
+                severity: warn
           - accepted_values:
               arguments:
                 values: ["yes", "no"]
@@ -331,6 +348,10 @@ models:
         description: "Regulatory authority's case number for the report (FAERS authoritynumb)."
       - name: company_number
         description: "Reporting company's internal case number for the report (FAERS companynumb)."
+      - name: source_quarter
+        description: "FAERS quarter this report version was loaded from, e.g. 2020q1. Carried so int_reports can record the span of quarters a report was published in."
+        data_tests:
+          - not_null
 
   - name: stg_deleted_cases
     description: >

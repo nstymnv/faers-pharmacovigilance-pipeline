@@ -1,0 +1,148 @@
+# Local Airflow for the FAERS pipeline. Cut down from Airflow's reference
+# compose file: LocalExecutor instead of Celery (no Redis, no workers, no
+# Flower) and no triggerer (nothing here is deferrable).
+# Airflow only issues commands to Snowflake, so this fits comfortably in WSL.
+#
+#   cp .env.example .env    # then fill it in
+#   docker compose up -d --build
+#   open http://localhost:8080
+
+x-airflow-common:
+  &airflow-common
+  build:
+    context: ../..
+    dockerfile: docker/airflow/Dockerfile
+  image: faers-airflow:3.3.2
+  env_file:
+    - .env
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    # FAB rather than the default SimpleAuthManager: users live in the metadata
+    # database with passwords you choose, so they survive restarts, and runs are
+    # attributed to a named user. The admin is created by airflow-init.
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    # Cosmos renders the dbt DAG by running `dbt ls` while the file is parsed,
+    # which takes longer than Airflow's 30-second default on a cold cache.
+    AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: '180'
+    AIRFLOW__DAG_PROCESSOR__DAG_FILE_PROCESSOR_TIMEOUT: '240'
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    # The code is mounted rather than copied into the image, so a change to the
+    # ingestion package or a dbt model needs no rebuild.
+    - ../../src:/opt/airflow/project/src:ro
+    - ../../dbt/faers_transformations:/opt/airflow/project/dbt/faers_transformations
+    - ../../keys:/opt/airflow/keys:ro
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/logs
+        # The entrypoint exits with an error when asked to create a user without
+        # a password, which would stop the whole stack from starting. So the
+        # admin is only created once .env sets one; re-run this service after
+        # filling it in. An existing user is left untouched.
+        if [[ -n "$${_AIRFLOW_WWW_USER_USERNAME}" && -n "$${_AIRFLOW_WWW_USER_PASSWORD}" ]]; then
+          export _AIRFLOW_WWW_USER_CREATE=true
+        else
+          echo "No admin user created: set _AIRFLOW_WWW_USER_USERNAME and _AIRFLOW_WWW_USER_PASSWORD in .env."
+        fi
+        /entrypoint airflow version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+    user: "0:0"
+
+  # Installs dbt_utils into the mounted project once, so Cosmos does not run
+  # `dbt deps` before each of its tasks. Runs as the host user so the
+  # dbt_packages/ it writes stays editable outside the container.
+  dbt-deps:
+    <<: *airflow-common
+    entrypoint: /opt/airflow/venvs/dbt/bin/dbt
+    command: ["deps", "--project-dir", "/opt/airflow/project/dbt/faers_transformations"]
+    depends_on: {}
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+      dbt-deps:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+      dbt-deps:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-db-volume:

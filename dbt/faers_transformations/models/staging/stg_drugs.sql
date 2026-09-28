@@ -34,7 +34,9 @@ normalized as (
         -- collapses the drugrecurrence explosion back to one row per drug
         drugrecuraction as recurrence_action,
         cast(actiondrug as int) as taken_action,
-        cast(drugadditional as int) as use_stopped_reduced
+        -- try_cast: 2023q3 carries one free-text value in this coded field.
+        try_cast(drugadditional as int) as use_stopped_reduced,
+        source_quarter
 
     from source
     where
@@ -42,7 +44,9 @@ normalized as (
         and safetyreportid is not null
         and medicinalproduct is not null
         and activesubstancename is not null
-        and drugcharacterization is not null
+        -- Only the three drug roles. 2023q3 has one entry coded 5 (product
+        -- "DEVICE"), a code FAERS does not define for drugs.
+        and drugcharacterization in (1, 2, 3)
 
 ),
 
@@ -86,7 +90,8 @@ standardized as (
             when use_stopped_reduced = 1 then 'yes'
             when use_stopped_reduced = 2 then 'no'
             when use_stopped_reduced = 3 then 'doesn''t Apply'
-        end as use_stopped_reduced
+        end as use_stopped_reduced,
+        source_quarter
     from normalized
 ),
 

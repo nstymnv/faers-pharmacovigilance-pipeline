@@ -25,12 +25,15 @@ normalized as (
         duplicatenumb as duplicate_numb,
         duplicatesource as duplicate_source,
         authoritynumb as authority_number,
-        companynumb as company_number
+        companynumb as company_number,
+        source_quarter
     from source
     where
         {{ faers_quarter_filter() }}
         and safetyreportid is not null
-        and serious is not null
+        -- Reports with no serious value are kept, as unknown seriousness. None
+        -- existed before 2025q4, which has 10,603 (2.8%); dropping them would cut
+        -- valid reports from every count and signal and fake a dip in the trend.
 ),
 
 standardized as (
@@ -72,7 +75,8 @@ standardized as (
         duplicate_numb,
         duplicate_source,
         authority_number,
-        company_number
+        company_number,
+        source_quarter
     from normalized
 ),
 

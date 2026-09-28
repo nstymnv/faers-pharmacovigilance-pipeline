@@ -1,0 +1,7 @@
+# The Airflow image is built from the repo root only to read requirements
+# files. Everything else — the .venv, data/, keys/ in particular — stays out of
+# the build context; the code is mounted at runtime instead.
+*
+!requirements.txt
+!requirements-dbt.txt
+!docker/airflow/requirements-airflow.txt

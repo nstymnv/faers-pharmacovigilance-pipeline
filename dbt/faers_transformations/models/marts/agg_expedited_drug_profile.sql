@@ -13,9 +13,8 @@
 -- the share. Power BI measures should be written that way.
 --
 -- Denominator caveat: report_count is over reports that survived the staging
--- filters (stg_reports drops reports with no seriousness value, stg_drugs drops
--- entries missing product, substance or characterization) and excludes
--- FDA-retracted reports.
+-- filters (stg_drugs drops entries missing product, substance or a known
+-- characterization) and excludes FDA-retracted reports.
 with drug_reports as (
 
     select

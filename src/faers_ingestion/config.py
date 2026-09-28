@@ -19,6 +19,12 @@ RAW_STAGE = f"{EXTRACTION_SCHEMA}.faers_raw"
 CODE_STAGE = f"{EXTRACTION_SCHEMA}.code"
 INGESTION_LOG_TABLE = f"{EXTRACTION_SCHEMA}.ingestion_log"
 
+# INGESTION_LOG statuses written by the load step. The ingestion procedure writes
+# its own SUCCEEDED / FAILED rows for staging; a quarter only counts as done once
+# it is LOADED into RAW, which is what the Airflow DAG checks.
+LOAD_SUCCEEDED_STATUS = "LOADED"
+LOAD_FAILED_STATUS = "LOAD_FAILED"
+
 RAW_SCHEMA = "raw"
 
 

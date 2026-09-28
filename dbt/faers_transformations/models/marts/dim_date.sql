@@ -1,8 +1,11 @@
 -- Grain: one row per calendar day, plus one unknown member.
 --
--- Spans whole calendar years around the range of report dates actually loaded,
--- so the spine widens by itself as quarters are backfilled and a year is never
--- half-covered. Report dates are the only dates keyed against this dimension:
+-- Spans whole calendar years around the receipt and transmission dates in
+-- fct_report, so the spine follows the analysis window as it moves and a year is
+-- never half-covered. Both are keyed against it, and transmission runs later than
+-- receipt: reports in the 2022q4 file were transmitted in January 2023. It is bounded by fct_report rather than int_reports because
+-- quarters outside the window stay loaded upstream, and a calendar reaching
+-- into them would show those years as empty trend points. Report dates are the only dates keyed against this dimension:
 -- they are clean 8-digit values, whereas drug dates are padded from partial
 -- precision (see the faers_to_date macro) and are published as plain dates
 -- rather than as keys.
@@ -14,12 +17,20 @@
 -- The bounds are inlined as subqueries rather than lifted into a CTE because
 -- date_spine emits its own WITH block, which cannot see one, and because
 -- dbt_utils runs the interval count as a query at compile time.
+{%- set report_date_keys -%}
+    (
+        select receipt_date_key as date_key from {{ ref('fct_report') }}
+        union all
+        select transmission_date_key from {{ ref('fct_report') }}
+    ) where date_key <> -1
+{%- endset %}
+
 with spine as (
 
     {{ dbt_utils.date_spine(
         datepart="day",
-        start_date="(select date_trunc('year', min(receipt_date)) from " ~ ref('int_reports') ~ ")",
-        end_date="(select dateadd(year, 1, date_trunc('year', max(receipt_date))) from " ~ ref('int_reports') ~ ")"
+        start_date="(select date_trunc('year', min(to_date(to_char(date_key), 'YYYYMMDD'))) from " ~ report_date_keys ~ ")",
+        end_date="(select dateadd(year, 1, date_trunc('year', max(to_date(to_char(date_key), 'YYYYMMDD')))) from " ~ report_date_keys ~ ")"
     ) }}
 
 ),

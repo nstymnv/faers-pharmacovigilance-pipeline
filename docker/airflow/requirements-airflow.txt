@@ -1,0 +1,5 @@
+# Installed into Airflow's own environment, under Airflow's constraints file.
+# The Snowflake provider already ships with the base image. dbt and the
+# ingestion code are NOT installed here: each gets its own virtualenv in the
+# image (see Dockerfile), because their pins clash with Airflow's.
+astronomer-cosmos==1.15.1

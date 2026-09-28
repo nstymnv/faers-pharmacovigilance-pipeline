@@ -6,7 +6,13 @@
 -- filter. See models/README.md for the duplicate/retraction policy.
 with ranked_versions as (
 
-    select *
+    -- The quarter span is taken before the qualify below, which keeps one
+    -- row per version: FDA can republish the same version in a later quarter,
+    -- and that later appearance still counts as the report being seen there.
+    select
+        *,
+        min(source_quarter) over (partition by report_id) as first_seen_quarter,
+        max(source_quarter) over (partition by report_id) as last_seen_quarter
     from {{ ref('stg_reports') }}
 
     qualify row_number() over (
@@ -32,6 +38,12 @@ deduplicated as (
 
         report_id,
         max(version) as version,
+
+        -- A report spans every quarter one of its versions was published in,
+        -- so a single source_quarter is not defined at this grain. The span is
+        -- what the marts window on (see faers_mart_window_filter).
+        min(first_seen_quarter) as first_seen_quarter,
+        max(last_seen_quarter) as last_seen_quarter,
 
         -- Every field below takes the latest version that actually supplied a
         -- value. A bare max_by(field, version) would return null whenever the
