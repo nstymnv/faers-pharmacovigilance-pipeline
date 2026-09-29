@@ -138,6 +138,11 @@ unit_tests:
       Reports 3 and 4 are a linked case whose later copy, report 4, was
       published after the analysis window; report 3 must survive rather than
       the case dropping out of the window. Report 5 is unlinked and untouched.
+    # The window filter is lifted while the faers_quarters dev slice is set,
+    # as it is in CI, and this test is about the window, so it pins the var.
+    overrides:
+      vars:
+        faers_quarters: []
     given:
       - input: ref('int_reports')
         rows:
