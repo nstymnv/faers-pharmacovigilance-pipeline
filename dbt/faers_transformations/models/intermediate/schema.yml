@@ -316,3 +316,27 @@ models:
           or by fallback, from the custom_reaction_groups_mapping seed. Lets
           consumers tell a confident grouping from a catch-all one.
 
+  - name: int_linked_reports
+    description: >
+      Reports that describe the same case as at least one other live report,
+      linked through a shared case identifier in the FAERS duplicate block
+      (duplicate_numb). Only groups of 2 to linked_case_max_reports reports with
+      no conflicting known sex or age qualify. fct_report keeps one report per
+      linked_case_id. See models/README.md, "Duplicate and retraction policy".
+    columns:
+      - name: report_id
+        description: FAERS report identifier.
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('int_reports')
+                field: report_id
+      - name: linked_case_id
+        description: >
+          The shared case identifier: a regulator's, literature service's or
+          other company's number for the case. Every value appears on 2 to
+          linked_case_max_reports rows.
+        data_tests:
+          - not_null

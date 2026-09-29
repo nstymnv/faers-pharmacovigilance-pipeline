@@ -52,7 +52,8 @@ vars:
   faers_quarters: []
 
   # Analysis window the marts report on: five full calendar years, so trends
-  # compare whole years. Quarters outside it (2020q1, the dev slice, and new
+  # compare whole years. Fixed permanently at 2021-2025 (decided 2026-09-29):
+  # the project is a reproducible snapshot, and README results depend on it. Quarters outside it (2020q1, the dev slice, and new
   # quarters once they are published) stay in RAW, staging and intermediate.
   # Ignored while faers_quarters is set; see faers_mart_window_filter.
   mart_start_quarter: '2021q1'
@@ -64,6 +65,11 @@ vars:
   # (concomitant) is what the patient happened to also be taking. Kept as a var
   # so the signal mart can be re-run on suspect alone without a code change.
   implicated_drug_roles: ['suspect', 'interacting']
+
+  # Largest group of reports sharing a case identifier that is still treated as
+  # one patient's case and collapsed to a single report (int_linked_reports).
+  # Bigger groups are mostly literature articles describing several patients.
+  linked_case_max_reports: 5
 
   # Evans criteria for calling a drug-reaction pair a signal: at least three
   # co-reported cases, PRR at or above 2, and a Yates-corrected chi-square at

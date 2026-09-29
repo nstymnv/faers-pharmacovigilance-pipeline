@@ -11,7 +11,7 @@ decision, with the measurements that drove it, read
 |---|---|---|---|
 | Sources | `RAW` | `reports`, `demographics`, `drug`, `reaction`, `deleted_cases` | Loaded per quarter by `faers_ingestion.main`; every row carries `source_quarter` |
 | Staging | `STAGING` | `stg_*` | Rename raw FAERS fields, cast, decode codes via seeds, repair format drift (e.g. trailing periods on 2021q1–q3 product names) |
-| Intermediate | `INTERMEDIATE` | `int_*` | One row per report: versions merged (latest non-null value per field), FDA retractions removed, conflicting values resolved |
+| Intermediate | `INTERMEDIATE` | `int_*` | One row per report: versions merged (latest non-null value per field), FDA retractions removed, conflicting values resolved; `int_linked_reports` lists reports sharing a case id |
 | Marts | `MART` | `fct_*`, `dim_*`, `brg_drug_reaction`, `mart_drug_reaction_signal`, `agg_*` | Star schema, PRR/ROR signal screen, quarterly aggregates; limited to the analysis window |
 
 Seeds (country, administration route, time and dosage units, reaction groups)
@@ -25,6 +25,7 @@ on the `ci` target, which prefixes `CI_`.
 |---|---|---|
 | `faers_quarters` | `[]` (all) | Restricts staging to the listed quarters, e.g. `[2020q1]`, for a cheap dev or CI run. While set, the mart window filter is lifted, since the dev slice sits outside the window |
 | `mart_start_quarter`, `mart_end_quarter` | `2021q1`, `2025q4` | The analysis window: marts keep reports published within it. Quarters outside stay in RAW and the lower layers, so moving the window is a var change, not a reload |
+| `linked_case_max_reports` | `5` | Largest group of reports sharing a case id that `fct_report` collapses to one; larger groups are mostly literature case series |
 | `implicated_drug_roles` | `['suspect', 'interacting']` | Drug roles treated as causally implicated, which gates the bridge and the signal mart |
 | `signal_min_cases`, `signal_min_prr`, `signal_min_chi2` | `3`, `2`, `4` | Evans criteria behind `is_signal` |
 
@@ -54,9 +55,10 @@ they show up when browsing `MART` directly.
 - **Singular tests** in [`tests/`](tests/) cross-check models against each
   other, e.g. that the four contingency cells of every signal pair sum to the
   universe.
-- **Unit tests** on inline data: the PRR/ROR math, dose-entry collapse and
-  onset-age normalization (`models/marts/unit_tests.yml`), and the report
-  version merge (`models/intermediate/unit_tests.yml`).
+- **Unit tests** on inline data: the PRR/ROR math, dose-entry collapse,
+  onset-age normalization and linked-duplicate collapse
+  (`models/marts/unit_tests.yml`), and the report version merge and
+  linked-case grouping (`models/intermediate/unit_tests.yml`).
 
 ## CI
 

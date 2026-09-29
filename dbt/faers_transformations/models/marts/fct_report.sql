@@ -11,18 +11,49 @@
 -- belongs. The duplicate_* columns are also withheld because their name invites
 -- exactly the filter that would delete 94% of the data (models/README.md).
 --
--- Denominator caveat: FDA-retracted reports are excluded upstream, so every
--- "share of" metric built on this table is computed over that filtered
--- population. is_serious is null where a report gives no seriousness value
+-- Linked duplicates (int_linked_reports) are collapsed here: of the reports
+-- in the window that describe the same linked case, only the most recently
+-- received survives, as it carries the latest information about the case, and
+-- merged_duplicate_count records how many copies it stands for. Done after the
+-- window filter so a case never drops out because its surviving copy was
+-- published outside the window.
+--
+-- Denominator caveat: FDA-retracted reports are excluded upstream, and linked
+-- duplicates here, so every "share of" metric built on this table is computed
+-- over that filtered population. is_serious is null where a report gives no seriousness value
 -- (from 2025q4), so a serious share is over reports whose seriousness is known.
 --
 -- This is the only mart that reads int_reports, and every other fact reaches
 -- its reports through an inner join to it, so the analysis-window filter here
 -- windows the whole star.
-with reports as (
+with windowed_reports as (
 
-    select * from {{ ref('int_reports') }}
-    where {{ faers_mart_window_filter() }}
+    select
+        r.*,
+        -- The prefixes keep a numeric case identifier from ever colliding with
+        -- an unrelated report_id.
+        iff(
+            l.linked_case_id is null,
+            'report:' || r.report_id,
+            'case:' || l.linked_case_id
+        ) as case_key
+    from {{ ref('int_reports') }} as r
+    left join {{ ref('int_linked_reports') }} as l
+        on r.report_id = l.report_id
+    where {{ faers_mart_window_filter('r.first_seen_quarter', 'r.last_seen_quarter') }}
+
+),
+
+reports as (
+
+    select
+        *,
+        count(*) over (partition by case_key) - 1 as merged_duplicate_count
+    from windowed_reports
+    qualify row_number() over (
+        partition by case_key
+        order by receipt_date desc nulls last, report_id desc
+    ) = 1
 
 ),
 
@@ -83,7 +114,9 @@ joined as (
         d.age_group,
         d.sex,
         {{ faers_age_years('d.onset_age', 'd.age_unit') }} as onset_age_years,
-        d.weight_kg
+        d.weight_kg,
+
+        r.merged_duplicate_count
 
     from reports as r
     left join demographics as d

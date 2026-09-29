@@ -101,39 +101,51 @@ including a zero-cell pair.
 
 ## Duplicate and retraction policy
 
-FAERS contains four different things that all get loosely called "duplicates".
+FAERS contains five different things that all get loosely called "duplicates".
 They are handled differently, and the differences matter for every count the
-marts produce. Figures below are measured on 2020q1 (460,327 reports).
+marts produce. Figures were first measured on 2020q1 (460,327 reports) and
+re-measured on the full load of 22 quarters, 2021q1-2026q2 plus 2020q1 (8.47M
+reports), on 2026-09-29; where the two differ, both are given.
 
-### 1. The `duplicate` columns are NOT a duplicate marker — never filter on them
+### 1. The `duplicate` block changed meaning in 2021q4 — never filter on the flag
 
-`duplicate_flag` / `duplicate_numb` / `duplicate_source` look like they identify
-redundant reports. They do not:
+`duplicate_flag` / `duplicate_numb` / `duplicate_source` are the E2B
+`<reportduplicate>` block. What they hold depends on the quarter:
 
-| Measurement | Result |
-|---|---|
-| `duplicate_flag = 1` | 433,215 of 460,327 reports (94%) |
-| `duplicate_numb = company_number` | 433,215 of 433,215 — 100% |
-| Distinct `report_id` per `duplicate_numb` value | 1, for every value; no collisions |
+| Measurement | 2020q1–2021q3 | 2021q4–2026q2 |
+|---|---|---|
+| `duplicate_flag = 1` | 94–97% of reports | 17–36% |
+| `duplicate_numb` present | 94–97% | 11–22% |
+| `duplicate_numb = company_number`, where present | 100% | 16–50% |
 
-This is the E2B `<reportduplicate>` block: the sender restating *its own* case
-number so the case can be recognised if it reaches FDA through another channel.
-It is a linkage identifier, not a redundancy flag. Filtering `duplicate_flag = 1`
-would delete 94% of the data and remove no actual duplicates, so nothing in this
-project filters on it. The columns are carried for traceability only.
+**Up to 2021q3** the block only restates the sender's *own* case number. No two
+reports share a value, so it links nothing, and filtering `duplicate_flag = 1`
+would delete 94% of the data without removing a single duplicate.
 
-**Caveat, to be revisited after the backfill:** this is measured on one quarter.
-A sender's case number recurring under a *different* `report_id` in a later
-quarter is exactly what would make this column useful for case linkage, and one
-quarter cannot show that. Re-run the two measurements above across the full
-5-year load before concluding anything further.
+**From 2021q4** — the same quarter FAERS changed its XML in other ways (see the
+schema-drift and trailing-period notes) — it mostly carries *another system's*
+identifier for the case: a regulator's (France's AFSSAPS, the UK's MHRA,
+China's NMPA, where it often equals `authority_number`), a literature
+service's article case id (Wipro, Adis/Springer Nature), or another company's
+case number. When two reports carry the same one, they are the same case
+arriving through two channels. Across the full load, 68,794 identifiers are
+shared by 2 or more different `report_id`s (170,802 reports). In groups of 2–5
+reports, **99% agree on sex and 97% on age** where both are recorded: the same
+patient, reported twice. Groups of 6 or more agree far less (74% and 67%) and
+reach 463 reports under one identifier: a literature article covering many
+patients, not one patient.
+
+Those same-patient groups are collapsed; see section 5. `duplicate_flag` itself
+is still never filtered on, and `fct_report` does not carry the block, so the
+name does not invite the filter.
 
 ### 2. Report versions — consolidated, not filtered
 
 The same `report_id` is republished as a new `version` when a reporter amends a
-case; versions run from 1 to 92 in 2020q1. Within a single quarter each
-`report_id` appears exactly once, so version collisions only occur *across*
-quarters.
+case; versions run from 1 to 92 in 2020q1 and to 256 across the full load.
+Within a single quarter a `report_id` almost always appears once (3 exceptions
+in 8.47M reports, each two consecutive versions in one file), so version
+collisions occur *across* quarters; the merge below handles either.
 
 - `int_reports` / `int_demographics` merge fields with
   `max_by(field, iff(field is not null, version, null))`, taking the latest
@@ -151,7 +163,7 @@ removed in the intermediate layer by every model, so no downstream denominator
 includes them and no mart can forget the filter.
 
 Retraction is not retrospective-only: 153 of 2020q1's 4,489 withdrawn ids name
-reports published *in* 2020q1. `stg_deleted_cases` therefore unions every
+reports published *in* 2020q1 (359 of 117,879 across the full load). `stg_deleted_cases` therefore unions every
 quarter's list and is deliberately exempt from the `faers_quarters` dev-slice
 var — narrowing it would let a dev build keep reports FDA has withdrawn.
 
@@ -160,8 +172,10 @@ var — narrowing it would let a dev build keep reports FDA has withdrawn.
 A report lists a drug **once per administered dose**, not once per product.
 Report 12610564 carries 100 `AFSTYLA ANTIHEMOPHILIC FACTOR (RECOMBINANT)` entries,
 each with its own dose and start date; report 15656224 carries 87 `NEXIUM`
-entries, and report 16538673 100 `IDELVION`. These are treatment
-diaries, not data-entry errors.
+entries, and report 16538673 100 `IDELVION`. Across the full load the record is
+report 19674678, with 3,902 entries over 42 products, one of them dosed 638
+times; 1,578 reports list a single product 50 times or more. These are
+treatment diaries, not data-entry errors.
 
 `int_drugs` keeps every entry, keyed `(report_id, drug_index)`, so dose amounts,
 dates and routes survive into the warehouse. **Marts must count distinct reports
@@ -172,14 +186,37 @@ The previous key was six drug attributes, which silently destroyed 155,043 of
 1,899,889 rows (8.2%); 55,032 of the collapsed groups differed in dose, start
 date or route, so they were distinct exposures rather than repeats.
 
-### 5. True clinical duplicates — out of scope, and a real limitation
+### 5. Linked duplicates — collapsed in `fct_report`; unlinked ones remain
 
-The same event reported independently by a manufacturer and a consumer arrives
-as two unrelated `report_id`s, and FAERS does not resolve them. Detecting them
-needs probabilistic matching on event date, age, sex, drug list and reaction
-list. Nothing here attempts it, so **absolute report counts are overstated by an
-unknown margin**. Disproportionality measures (PRR/ROR) are more robust to this
-than raw counts, since duplicates inflate numerator and denominator together.
+The same event reported by a regulator and a manufacturer, or picked up from
+one journal article by two companies, arrives as two unrelated `report_id`s.
+Where the reports share a case identifier in the duplicate block (section 1),
+they are linked:
+
+- **`int_linked_reports`** lists every live report in a group of 2 to
+  `linked_case_max_reports` (default 5) reports that share a `duplicate_numb`,
+  provided their known sexes agree and their known ages agree in whole years; a
+  missing value is not a conflict. 161,263 reports in 67,441 cases qualify.
+- **`fct_report`** keeps one report per linked case among the reports in the
+  analysis window: the most recently received, since it carries the latest
+  information. `merged_duplicate_count` records how many copies it stands for.
+  Because every other fact reaches its reports through `fct_report`, the
+  other copies' drugs and reactions leave the star with them. This happens
+  after the window filter, not in the intermediate layer, so a case never drops
+  out of the window because its surviving copy was published after it.
+
+Effect on the window: 7,302,509 reports become 7,219,961 cases, 82,548 fewer
+(1.13%). Only the surviving copy's drug and reaction lists count; the copies
+are not merged field by field.
+
+**What remains:** duplicates with no shared identifier (a doctor and a patient
+reporting the same event independently), all duplicates before 2021q4 (the
+block never links reports there), and case series under one article id. Finding
+those needs probabilistic matching on event date, age, sex, drug list and
+reaction list, which nothing here attempts, so absolute report counts are still
+overstated by an unknown, smaller margin. Disproportionality measures (PRR/ROR)
+are more robust to this than raw counts, since duplicates inflate numerator and
+denominator together.
 
 ### Conflicting values within one report
 
