@@ -1,0 +1,10 @@
+# Lint and test tooling, used locally and in CI (.github/workflows/ci.yml).
+# sqlfluff-templater-dbt resolves ref()/var() in dbt models; it needs dbt itself,
+# so install requirements-dbt.txt alongside this file to lint dbt models.
+ruff==0.16.9
+sqlfluff==4.3.0
+sqlfluff-templater-dbt==4.3.0
+pytest==9.1.1
+# Imported by sprocs/ingest_faers_quarter.py, which the tests load outside
+# Snowflake. Same version as the procedure's PACKAGES clause in sprocs/deploy.py.
+stream-inflate==0.0.43

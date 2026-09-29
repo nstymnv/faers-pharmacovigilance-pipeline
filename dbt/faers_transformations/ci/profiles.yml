@@ -1,0 +1,23 @@
+# dbt profile for GitHub Actions, used with `--profiles-dir ci --target ci`.
+# It lives in ci/ rather than the project root because a profiles.yml there
+# would take precedence over ~/.dbt/ for every local run.
+#
+# Everything secret comes from the environment: SNOWFLAKE_ACCOUNT and
+# FAERS_CI_PRIVATE_KEY (the full PEM text of keys/faers_ci_key.p8). User, role
+# and warehouse are fixed by sql/06_create_ci_identity.sql.
+faers_transformations:
+  target: ci
+  outputs:
+    ci:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: FAERS_CI
+      private_key: "{{ env_var('FAERS_CI_PRIVATE_KEY') }}"
+      role: FAERS_CI
+      warehouse: FAERS_WH
+      database: FAERS_DB
+      # generate_schema_name prefixes ci_, so seeds and any model without a
+      # custom schema land in CI_STAGING.
+      schema: staging
+      threads: 4
+      client_session_keep_alive: false

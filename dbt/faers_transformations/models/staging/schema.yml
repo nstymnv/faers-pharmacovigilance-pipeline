@@ -40,6 +40,12 @@ models:
 
   - name: stg_drugs
     description: "Model for cleaning and transforming the FAERS drug data"
+    data_tests:
+      # Model-level rather than on the column: attached to a column,
+      # expression_is_true prefixes the expression with the column name.
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "not endswith(medicinal_product, '.') or endswith(medicinal_product, '..')"
     columns:
       - name: report_id
         description: "FAERS safety report identifier. Anchors joins to the other staging models; not unique on its own since a report can have multiple versions (see version) and multiple drugs per version."
@@ -52,7 +58,7 @@ models:
         data_tests:
           - not_null
       - name: medicinal_product
-        description: "The name of the medicinal product"
+        description: "The name of the medicinal product, uppercased, with the single trailing period that 2021q1-q3 exports append dropped."
         data_tests:
           - not_null
       - name: active_substance

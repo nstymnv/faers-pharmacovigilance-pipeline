@@ -5,6 +5,8 @@ dialect = snowflake
 # beyond this project's formatting convention (casing/spacing/whitespace only)
 # and would otherwise produce noisy, non-cosmetic diffs.
 exclude_rules = structure.column_order, structure.join_condition_order
+# Same limit as ruff (pyproject.toml), so Python and SQL wrap alike.
+max_line_length = 100
 
 [sqlfluff:templater:dbt]
 project_dir = .
@@ -19,3 +21,7 @@ extended_capitalisation_policy = lower
 
 [sqlfluff:rules:capitalisation.literals]
 capitalisation_policy = lower
+
+# `version` is FAERS's report version, a column name every layer shares.
+[sqlfluff:rules:references.keywords]
+ignore_words = version

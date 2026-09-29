@@ -65,5 +65,6 @@ select
     coalesce(v.distinct_reaction_count, 0) as distinct_reaction_count
 from aggregated as a
 left join reaction_variety as v
-    on a.drug_key = v.drug_key
-    and a.year_quarter = v.year_quarter
+    on
+        a.drug_key = v.drug_key
+        and a.year_quarter = v.year_quarter

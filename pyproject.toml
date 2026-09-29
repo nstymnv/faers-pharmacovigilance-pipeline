@@ -14,3 +14,8 @@ where = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+# Import faers_ingestion from src/ without requiring `pip install -e .` first.
+pythonpath = ["src"]

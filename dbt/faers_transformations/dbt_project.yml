@@ -40,9 +40,8 @@ models:
     marts:
       +materialized: table
       +schema: mart
-      # Mart descriptions are the only documentation a Power BI user ever sees,
-      # so they are pushed into Snowflake's own comments rather than living only
-      # in dbt docs.
+      # Mart descriptions are pushed into Snowflake's own comments, so anyone
+      # browsing MART sees them, rather than living only in dbt docs.
       +persist_docs:
         relation: true
         columns: true

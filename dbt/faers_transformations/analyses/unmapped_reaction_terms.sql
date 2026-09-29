@@ -16,4 +16,4 @@ select
 from {{ ref('stg_reaction') }}
 where custom_reaction_group is null
 group by reaction
-order by report_count desc, reaction
+order by report_count desc, reaction asc

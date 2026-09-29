@@ -12,7 +12,7 @@ import struct
 import time
 import zipfile
 import zlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 from stream_inflate import stream_inflate64
@@ -48,7 +48,7 @@ def _log(session, quarter_key, source_url, status, files, size, started_at, erro
             files,
             size,
             started_at,
-            datetime.now(timezone.utc),
+            datetime.now(UTC),
             error or "",
         ],
     ).collect()
@@ -71,8 +71,7 @@ def _download_zip(url: str, destination: str) -> int:
         response.raise_for_status()
 
         with open(destination, "wb") as handle:
-            for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_BYTES):
-                handle.write(chunk)
+            handle.writelines(response.iter_content(chunk_size=DOWNLOAD_CHUNK_BYTES))
 
     return os.path.getsize(destination)
 
@@ -166,7 +165,7 @@ def _stage_members(session, zip_path: str, work_dir: str, year: int, quarter: in
 def run(session, year: int, quarter: int, force: bool = False) -> dict:
     quarter_key = _quarter_key(year, quarter)
     source_url = FAERS_ZIP_URL_TEMPLATE.format(year=year, quarter=quarter)
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
 
     if not force and _already_succeeded(session, quarter_key):
         return {"quarter": quarter_key, "status": "SKIPPED", "reason": "already ingested"}

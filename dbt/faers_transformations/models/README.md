@@ -257,6 +257,18 @@ Two columns previously merged "no value reported" into a real coded category:
 The rule is per-column and comes from the FAERS spec, not from a convention that
 can be applied blindly.
 
+### Trailing periods on product names (2021q1-q3)
+
+The 2021q1-q3 exports end 29% of `medicinalproduct` values with a period
+(`PREDNISONE.`, `OSIMERTINIB.`); from 2021q4 it is under 0.1%. Mostly generic
+names are affected, brands like HUMIRA are not. Left in place, one product
+became two `dim_drug` rows, so prednisone appeared to grow from 9,007 reports in
+2021 to 39,602 in 2022 when 30,972 of its 2021 reports sat under `PREDNISONE.`,
+and the signal mart split each affected drug's reports across two keys.
+`stg_drugs` drops a single trailing period; `...`, FAERS's marker for a
+truncated name, is kept. This is format repair, not drug-name normalization:
+spelling variants and brand-to-generic resolution are still not done.
+
 ### `use_stopped_reduced` is the dechallenge outcome
 
 Despite the column name, FAERS `drugadditional` records whether the event

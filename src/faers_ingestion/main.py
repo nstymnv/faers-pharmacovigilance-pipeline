@@ -11,7 +11,7 @@ import argparse
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import snowflake.connector
 
@@ -93,7 +93,7 @@ def record_load(
                 stage_xml_prefix(year, quarter),
                 status,
                 started_at,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
                 error_message,
             ),
         )
@@ -162,7 +162,7 @@ def main() -> None:
             if args.ingest:
                 ingest_quarter(year, quarter, args.force)
 
-            started_at = datetime.now(timezone.utc)
+            started_at = datetime.now(UTC)
             try:
                 counts = load_quarter(spark, year, quarter)
             except Exception as exc:

@@ -5,7 +5,7 @@ with expected as (
 
     select count(*) as row_count
     from {{ ref('int_reactions') }} as r
-    where r.report_id in (select report_id from {{ ref('fct_report') }})
+    where r.report_id in (select f.report_id from {{ ref('fct_report') }} as f)
 
 ),
 

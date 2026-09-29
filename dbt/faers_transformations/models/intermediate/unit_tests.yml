@@ -1,0 +1,40 @@
+unit_tests:
+
+  - name: test_report_version_merge
+    model: int_reports
+    description: >
+      The version merge takes each field's latest non-null value rather than the
+      latest row, drops FDA-retracted reports, and spans every quarter a report
+      was published in.
+
+      Report 1 has two versions. Version 2 omits source_country and
+      company_number, so both must come from version 1, while serious, which
+      version 2 does supply, must come from version 2 even though it changed.
+      Version 2 is also republished in 2020q3 with a later transmission date:
+      that copy must win the per-version dedupe and extend the quarter span, but
+      not count as a third version. Report 2 is retracted and must disappear.
+      Report 3 has one version and passes through.
+    given:
+      - input: ref('stg_reports')
+        rows:
+          - {report_id: 1, version: 1, source_quarter: '2020q1', transmission_date: '2020-01-10',
+             receipt_date: '2020-01-05', source_country: 'US', serious: 'yes', company_number: 'A-1'}
+          - {report_id: 1, version: 2, source_quarter: '2020q2', transmission_date: '2020-04-10',
+             receipt_date: '2020-04-02', source_country: null, serious: 'no', company_number: null}
+          - {report_id: 1, version: 2, source_quarter: '2020q3', transmission_date: '2020-07-10',
+             receipt_date: '2020-04-03', source_country: null, serious: 'no', company_number: null}
+          - {report_id: 2, version: 1, source_quarter: '2020q1', transmission_date: '2020-01-10',
+             receipt_date: '2020-01-05', source_country: 'FR', serious: 'yes', company_number: 'B-1'}
+          - {report_id: 3, version: 1, source_quarter: '2020q2', transmission_date: '2020-04-10',
+             receipt_date: '2020-04-01', source_country: 'JP', serious: 'no', company_number: 'C-1'}
+      - input: ref('stg_deleted_cases')
+        rows:
+          - {report_id: 2}
+    expect:
+      rows:
+        # receipt_date comes from the 2020q3 copy of version 2: the per-version
+        # dedupe keeps the latest transmission.
+        - {report_id: 1, version: 2, first_seen_quarter: '2020q1', last_seen_quarter: '2020q3',
+           receipt_date: '2020-04-03', source_country: 'US', serious: 'no', company_number: 'A-1'}
+        - {report_id: 3, version: 1, first_seen_quarter: '2020q2', last_seen_quarter: '2020q2',
+           receipt_date: '2020-04-01', source_country: 'JP', serious: 'no', company_number: 'C-1'}

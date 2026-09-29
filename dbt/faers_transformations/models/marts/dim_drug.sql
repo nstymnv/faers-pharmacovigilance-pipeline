@@ -22,7 +22,9 @@ with drugs as (
 final as (
 
     select
-        {{ dbt_utils.generate_surrogate_key(['medicinal_product', 'active_substance']) }} as drug_key,
+        {{ dbt_utils.generate_surrogate_key(
+            ['medicinal_product', 'active_substance']
+        ) }} as drug_key,
         medicinal_product,
         active_substance
     from drugs
