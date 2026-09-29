@@ -1,0 +1,5 @@
+# Extra sqlfluff config for CI, passed with `--config ci/.sqlfluff`: the dbt
+# templater compiles against the ci target instead of ~/.dbt's dev target.
+[sqlfluff:templater:dbt]
+profiles_dir = ci
+target = ci

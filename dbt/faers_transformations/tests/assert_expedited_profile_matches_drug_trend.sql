@@ -12,8 +12,9 @@ select
     t.expedited_report_count as trend_expedited_count
 from {{ ref('agg_expedited_drug_profile') }} as p
 full outer join {{ ref('agg_drug_quarterly_trend') }} as t
-    on p.drug_key = t.drug_key
-    and p.year_quarter = t.year_quarter
+    on
+        p.drug_key = t.drug_key
+        and p.year_quarter = t.year_quarter
 where
     p.drug_key is null
     or t.drug_key is null

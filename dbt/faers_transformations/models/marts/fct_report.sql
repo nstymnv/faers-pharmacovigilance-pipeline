@@ -37,19 +37,23 @@ joined as (
     select
         r.report_id,
 
-        coalesce(cast(to_char(r.receipt_date, 'YYYYMMDD') as int), -1) as receipt_date_key,
-        coalesce(cast(to_char(r.transmission_date, 'YYYYMMDD') as int), -1) as transmission_date_key,
+        coalesce(to_char(r.receipt_date, 'YYYYMMDD')::int, -1) as receipt_date_key,
+        coalesce(to_char(r.transmission_date, 'YYYYMMDD')::int, -1) as transmission_date_key,
 
         -- The hash has to be built from the same two columns in the same order
         -- as dim_country, and a null country needs the unknown member rather
         -- than a hash of nulls, which would be a key pointing at nothing.
         case
             when r.source_country is null then '-1'
-            else {{ dbt_utils.generate_surrogate_key(['r.source_country', 'r.source_country_name']) }}
+            else {{ dbt_utils.generate_surrogate_key(
+                ['r.source_country', 'r.source_country_name']
+            ) }}
         end as source_country_key,
         case
             when r.occurrence_country is null then '-1'
-            else {{ dbt_utils.generate_surrogate_key(['r.occurrence_country', 'r.occurrence_country_name']) }}
+            else {{ dbt_utils.generate_surrogate_key(
+                ['r.occurrence_country', 'r.occurrence_country_name']
+            ) }}
         end as occurrence_country_key,
 
         r.serious = 'yes' as is_serious,

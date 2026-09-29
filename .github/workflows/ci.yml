@@ -1,0 +1,106 @@
+# Lint and tests. The Python and queries/ jobs never touch Snowflake and run on
+# every push. The dbt job starts the warehouse, so it runs only on pull requests
+# into main and when started by hand (Actions tab → CI → Run workflow).
+#
+# Secrets for the dbt job: SNOWFLAKE_ACCOUNT, and FAERS_CI_PRIVATE_KEY holding
+# the full PEM text of the FAERS_CI key (sql/06_create_ci_identity.sql).
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install
+        run: pip install -r requirements.txt -r requirements-dev.txt -e .
+
+      - name: ruff check
+        run: ruff check src docker/airflow/dags test
+
+      - name: ruff format
+        run: ruff format --check src docker/airflow/dags test
+
+      - name: pytest
+        run: pytest
+
+  queries:
+    name: Lint queries/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      # queries/.sqlfluff: plain Snowflake SQL, no dbt templating.
+      - name: sqlfluff lint
+        run: sqlfluff lint queries/
+
+  dbt:
+    name: dbt build and lint (2020q1 slice)
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Every run writes to the same CI_ schemas, so runs queue rather than
+    # overlap, and a queued run is never cancelled halfway through a build.
+    concurrency:
+      group: dbt-ci
+      cancel-in-progress: false
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      FAERS_CI_PRIVATE_KEY: ${{ secrets.FAERS_CI_PRIVATE_KEY }}
+    defaults:
+      run:
+        working-directory: dbt/faers_transformations
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dbt.txt
+            requirements-dev.txt
+
+      - name: Install
+        working-directory: .
+        run: pip install -r requirements-dbt.txt -r requirements-dev.txt
+
+      - name: dbt deps
+        run: dbt deps
+
+      # The dev slice is one quarter outside the analysis window; the mart
+      # window filter is lifted while faers_quarters is set.
+      - name: dbt build
+        run: |
+          dbt build --profiles-dir ci --target ci --vars '{faers_quarters: [2020q1]}'
+
+      # After the build, not before: compiling dim_date queries CI_MART.FCT_REPORT
+      # for its date bounds, so the dbt templater needs the built tables.
+      - name: sqlfluff lint
+        run: sqlfluff lint models tests analyses --config ci/.sqlfluff

@@ -39,8 +39,7 @@ def deploy() -> None:
         cursor = conn.cursor()
 
         cursor.execute(
-            f"put file://{HANDLER_FILE} @{CODE_STAGE}"
-            " auto_compress=false overwrite=true"
+            f"put file://{HANDLER_FILE} @{CODE_STAGE} auto_compress=false overwrite=true"
         )
         logger.info("uploaded %s to @%s", HANDLER_FILE.name, CODE_STAGE)
 

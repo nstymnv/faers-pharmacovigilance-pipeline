@@ -15,7 +15,9 @@ with drugs as (
 
     select
         report_id,
-        {{ dbt_utils.generate_surrogate_key(['medicinal_product', 'active_substance']) }} as drug_key,
+        {{ dbt_utils.generate_surrogate_key(
+            ['medicinal_product', 'active_substance']
+        ) }} as drug_key,
         drug_characterization,
         -- 18 start dates and 3 end dates in 2020q1 fall outside 1900-today,
         -- mostly a mistyped leading digit (3019 for 2019). A four-digit typo

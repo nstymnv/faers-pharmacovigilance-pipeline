@@ -1,0 +1,27 @@
+version: 2
+
+exposures:
+
+  - name: business_questions
+    label: Business-question queries
+    type: analysis
+    maturity: medium
+    url: https://github.com/nstymnv/faers-pharmacovigilance-pipeline/tree/main/queries
+    description: >
+      One Snowflake SQL file per business question in queries/, run in a
+      worksheet against MART; the root README carries dated results. The queries
+      name tables directly (faers_db.mart.*) rather than through ref(), so this
+      list must be updated by hand when a query starts or stops reading a model.
+    owner:
+      name: nstymnv
+    depends_on:
+      - ref('fct_report')
+      - ref('fct_report_drug')
+      - ref('fct_report_reaction')
+      - ref('dim_date')
+      - ref('dim_drug')
+      - ref('dim_reaction')
+      - ref('agg_drug_quarterly_trend')
+      - ref('agg_reaction_frequency')
+      - ref('agg_outcome_trend')
+      - ref('mart_drug_reaction_signal')

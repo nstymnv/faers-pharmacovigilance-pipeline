@@ -3,10 +3,11 @@
 -- Spans whole calendar years around the receipt and transmission dates in
 -- fct_report, so the spine follows the analysis window as it moves and a year is
 -- never half-covered. Both are keyed against it, and transmission runs later than
--- receipt: reports in the 2022q4 file were transmitted in January 2023. It is bounded by fct_report rather than int_reports because
--- quarters outside the window stay loaded upstream, and a calendar reaching
--- into them would show those years as empty trend points. Report dates are the only dates keyed against this dimension:
--- they are clean 8-digit values, whereas drug dates are padded from partial
+-- receipt: reports in the 2022q4 file were transmitted in January 2023. It is
+-- bounded by fct_report rather than int_reports because quarters outside the
+-- window stay loaded upstream, and a calendar reaching into them would show
+-- those years as empty trend points. Report dates are the only dates keyed
+-- against this dimension: they are clean 8-digit values, whereas drug dates are padded from partial
 -- precision (see the faers_to_date macro) and are published as plain dates
 -- rather than as keys.
 --
