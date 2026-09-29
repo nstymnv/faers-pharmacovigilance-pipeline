@@ -55,7 +55,15 @@ standardized as (
         report_id,
         version,
         drug_index,
-        medicinal_product,
+        -- 2021q1-q3 exports end 29% of product names with a period
+        -- ("PREDNISONE."), later quarters almost never do, so one product split
+        -- into two dim_drug rows and every drug trend jumped at 2021q4. Only a
+        -- single period is dropped: "..." is FAERS's truncation marker.
+        iff(
+            endswith(medicinal_product, '.') and not endswith(medicinal_product, '..'),
+            rtrim(left(medicinal_product, length(medicinal_product) - 1)),
+            medicinal_product
+        ) as medicinal_product,
         active_substance,
         case
             when drug_characterization = 1 then 'suspect'
