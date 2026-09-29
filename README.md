@@ -7,7 +7,7 @@ Reporting System (FAERS) publishes every report it receives, about 1.4 million
 a year, as quarterly XML exports: deeply nested, versioned, and hard to analyse
 as they come.
 
-This project ingests five years of FAERS (2021–2025, 7.2 million reports) into
+This project ingests five years of FAERS (2021–2025, 7.2 million cases) into
 Snowflake, models them into a star schema with dbt, adds a
 disproportionality (PRR/ROR) signal screen, and answers a set of drug-safety
 business questions with plain SQL in [`queries/`](queries/).
@@ -75,22 +75,23 @@ how the query answers the question and which traps it avoids.
 
 ## Findings
 
-Results as of **2026-09-29**, over reports received 2021Q1–2025Q4. Each table
-shows the top of the query's output; run the query for the full list. These are
-counts of *reports*, which reflect reporting behaviour as much as drug safety
-(see [Limitations](#limitations)).
+Results as of **2026-09-29**, over reports received 2021Q1–2025Q4, after linked
+duplicates are collapsed (see [Data quality decisions](#data-quality-decisions)).
+Each table shows the top of the query's output; run the query for the full list.
+These are counts of *reports*, which reflect reporting behaviour as much as drug
+safety (see [Limitations](#limitations)).
 
 ### Context: report volume
 
 | Year | Reports | Serious share | Expedited share |
 |---|---:|---:|---:|
-| 2021 | 1,561,496 | 64.2% | 55.7% |
-| 2022 | 1,526,834 | 58.1% | 51.5% |
-| 2023 | 1,385,486 | 56.2% | 53.7% |
-| 2024 | 1,340,059 | 53.1% | 50.5% |
-| 2025 | 1,389,112 | 55.8% | 51.4% |
+| 2021 | 1,555,925 | 64.1% | 55.6% |
+| 2022 | 1,508,023 | 57.7% | 51.1% |
+| 2023 | 1,365,632 | 55.6% | 53.1% |
+| 2024 | 1,321,316 | 52.5% | 49.8% |
+| 2025 | 1,369,840 | 55.2% | 50.7% |
 
-Total volume fell about 11% from 2021 to 2025, so any drug or reaction that
+Total volume fell about 12% from 2021 to 2025, so any drug or reaction that
 grew did so against the tide.
 
 ### 1. Highest share of expedited reports
@@ -104,7 +105,7 @@ Drugs implicated in at least 1,000 reports:
 | Ranitidine hydrochloride (156) | 5,879 | 5,879 | 100% |
 | Duodopa (carbidopa/levodopa) | 2,326 | 2,326 | 100% |
 | Infliximab, recombinant | 1,048 | 1,048 | 100% |
-| Phthalylsulfathiazole | 5,788 | 5,781 | 99.9% |
+| Phthalylsulfathiazole | 5,651 | 5,644 | 99.9% |
 | Crysvita (burosumab) | 3,638 | 3,633 | 99.9% |
 | Jakavi (ruxolitinib) | 1,127 | 1,126 | 99.9% |
 
@@ -119,15 +120,15 @@ non-serious reports, such as Humira (43%), sit far lower.
 
 | Reaction | Expedited reports | Share of expedited | Share of all | Over-representation |
 |---|---:|---:|---:|---:|
-| Death | 268,245 | 7.1% | 4.1% | 1.72 |
-| Off label use | 255,083 | 6.7% | 6.1% | 1.10 |
-| Drug ineffective | 185,208 | 4.9% | 6.3% | 0.78 |
-| Fatigue | 139,235 | 3.7% | 3.8% | 0.98 |
-| Nausea | 121,740 | 3.2% | 3.3% | 0.98 |
-| Dyspnoea | 110,472 | 2.9% | 2.4% | 1.21 |
-| Pneumonia | 84,996 | 2.2% | 1.5% | 1.55 |
-| Pyrexia | 78,900 | 2.1% | 1.5% | 1.39 |
-| Fall | 75,527 | 2.0% | 1.4% | 1.43 |
+| Death | 266,583 | 7.2% | 4.1% | 1.73 |
+| Off label use | 248,783 | 6.7% | 6.1% | 1.10 |
+| Drug ineffective | 180,311 | 4.9% | 6.3% | 0.77 |
+| Fatigue | 137,324 | 3.7% | 3.8% | 0.98 |
+| Nausea | 119,523 | 3.2% | 3.3% | 0.98 |
+| Dyspnoea | 108,558 | 2.9% | 2.4% | 1.21 |
+| Pneumonia | 84,075 | 2.3% | 1.5% | 1.56 |
+| Pyrexia | 77,350 | 2.1% | 1.5% | 1.40 |
+| Fall | 74,484 | 2.0% | 1.4% | 1.44 |
 
 Expedited cases are mostly the same common reactions as all reports, but
 death, pneumonia, falls and fever are markedly over-represented in them, while
@@ -138,11 +139,11 @@ are under-represented: they are rarely serious.
 
 | Age group | Share of expedited | Share of all | | Sex | Share of expedited | Share of all |
 |---|---:|---:|---|---|---:|---:|
-| Adult (18–64) | 37.1% | 34.8% | | Female | 46.6% | 49.4% |
-| Elderly (65+) | 26.2% | 23.4% | | Male | 38.9% | 35.4% |
-| Adolescent / child | 3.4% | 3.6% | | Not reported | 14.5% | 15.0% |
+| Adult (18–64) | 36.9% | 34.7% | | Female | 46.6% | 49.4% |
+| Elderly (65+) | 26.1% | 23.3% | | Male | 38.9% | 35.4% |
+| Adolescent / child | 3.3% | 3.6% | | Not reported | 14.5% | 15.0% |
 | Infant / neonate | 1.0% | 0.7% | | | | |
-| Not reported | 32.2% | 37.4% | | | | |
+| Not reported | 32.6% | 37.6% | | | | |
 
 Women file most reports overall, but men and the elderly make up a larger share
 of the expedited ones than of all reports.
@@ -151,15 +152,15 @@ of the expedited ones than of all reports.
 
 | Age group | Sex | Reports | Expedited rate | vs. all reports |
 |---|---|---:|---:|---:|
-| Infant | Female | 11,199 | 70.2% | 1.33× |
-| Infant | Male | 13,958 | 68.7% | 1.31× |
-| Elderly | Male | 744,311 | 63.8% | 1.21× |
-| Adult | Male | 929,176 | 62.8% | 1.19× |
-| Elderly | Female | 892,698 | 55.1% | 1.05× |
-| Adult | Female | 1,492,237 | 52.1% | 0.99× |
-| Child | Female | 53,896 | 47.2% | 0.90× |
-| Child | Male | 68,275 | 47.6% | 0.90× |
-| Adolescent | Male | 63,703 | 44.5% | 0.84× |
+| Infant | Female | 11,005 | 69.8% | 1.34× |
+| Infant | Male | 13,720 | 68.3% | 1.31× |
+| Elderly | Male | 731,651 | 63.3% | 1.21× |
+| Adult | Male | 913,665 | 62.2% | 1.19× |
+| Elderly | Female | 879,366 | 54.5% | 1.05× |
+| Adult | Female | 1,472,755 | 51.6% | 0.99× |
+| Child | Male | 67,303 | 47.0% | 0.90× |
+| Child | Female | 53,123 | 46.5% | 0.89× |
+| Adolescent | Male | 62,787 | 43.7% | 0.84× |
 
 Yes: infants' reports are a third more likely to be expedited than the average
 report, and men's are more likely than women's in every adult age band. This
@@ -171,16 +172,16 @@ groups are at higher risk.
 
 | Product | Serious reports (implicated) | Serious share | Deaths | Serious, as concomitant |
 |---|---:|---:|---:|---:|
-| Zantac (ranitidine) | 280,497 | 99.8% | 16,820 | 3,584 |
-| Ranitidine | 127,466 | 99.7% | 8,772 | 7,045 |
-| Humira (adalimumab) | 85,720 | 48.9% | 8,179 | 6,770 |
-| OxyContin (oxycodone) | 80,637 | 98.0% | 6,542 | 2,631 |
-| Prednisone | 80,019 | 92.7% | 12,252 | 92,216 |
-| Methotrexate | 76,383 | 92.2% | 9,394 | 38,441 |
-| Rituximab | 75,465 | 93.8% | 15,172 | 9,007 |
-| Cyclophosphamide | 63,806 | 97.7% | 11,356 | 13,541 |
-| Dexamethasone | 60,071 | 96.3% | 10,322 | 44,542 |
-| Revlimid (lenalidomide) | 54,116 | 41.0% | 8,356 | 1,444 |
+| Zantac (ranitidine) | 280,479 | 99.8% | 16,820 | 3,558 |
+| Ranitidine | 127,409 | 99.7% | 8,759 | 6,893 |
+| Humira (adalimumab) | 85,343 | 48.8% | 8,097 | 6,527 |
+| OxyContin (oxycodone) | 80,529 | 98.0% | 6,528 | 2,556 |
+| Prednisone | 76,559 | 92.5% | 11,778 | 90,775 |
+| Methotrexate | 73,664 | 92.0% | 9,031 | 37,813 |
+| Rituximab | 72,419 | 93.5% | 14,703 | 8,510 |
+| Cyclophosphamide | 59,933 | 97.5% | 10,848 | 13,196 |
+| Dexamethasone | 55,800 | 96.1% | 9,721 | 43,349 |
+| Revlimid (lenalidomide) | 53,618 | 40.9% | 8,319 | 1,411 |
 
 Ranitidine and, most likely, OxyContin rank on litigation-driven reporting. The rest are
 immunosuppressants and cancer drugs, given to patients who are already very
@@ -194,11 +195,11 @@ suspect.
 |---|---:|---:|
 | Fatal | 7.0% | 0.0% |
 | Recovered with sequelae | 0.4% | 0.1% |
-| Not recovered / not resolved | 15.8% | 12.2% |
-| Recovering / resolving | 7.6% | 3.9% |
-| Recovered / resolved | 14.7% | 9.7% |
-| Unknown | 50.3% | 69.0% |
-| Not reported | 4.1% | 5.0% |
+| Not recovered / not resolved | 15.9% | 12.2% |
+| Recovering / resolving | 7.5% | 3.9% |
+| Recovered / resolved | 14.5% | 9.7% |
+| Unknown | 50.5% | 69.0% |
+| Not reported | 4.2% | 5.0% |
 
 Half of all reactions on serious reports have an unknown outcome; of those with
 a known one, "not recovered" is the most common, and 7% are fatal.
@@ -215,18 +216,18 @@ Only drugs with at least 1,000 reports in the window are ranked.
 | Cohort | Product | 2021 | 2025 | Growth / quarter |
 |---|---|---:|---:|---:|
 | Established | Tymlos (abaloparatide) | 223 | 5,981 | 0.204 |
-| Established | Benralizumab | 138 | 2,130 | 0.199 |
-| Established | Acalabrutinib | 162 | 1,876 | 0.163 |
-| Established | Osimertinib | 434 | 3,470 | 0.150 |
-| Established | Orgovyx (relugolix) | 365 | 11,855 | 0.144 |
-| Established | Nubeqa (darolutamide) | 165 | 1,990 | 0.137 |
-| Established | Wegovy (semaglutide) | 483 | 5,906 | 0.129 |
-| Established | Depo-Provera (medroxyprogesterone) | 180 | 2,297 | 0.128 |
-| New | Bimzelx (bimekizumab) | 0 | 8,446 | 0.263 |
-| New | Nemluvio (nemolizumab) | 0 | 7,163 | 0.257 |
+| Established | Benralizumab | 136 | 2,128 | 0.199 |
+| Established | Acalabrutinib | 162 | 1,864 | 0.163 |
+| Established | Osimertinib | 433 | 3,449 | 0.150 |
+| Established | Orgovyx (relugolix) | 365 | 11,853 | 0.144 |
+| Established | Nubeqa (darolutamide) | 165 | 1,980 | 0.137 |
+| Established | Wegovy (semaglutide) | 483 | 5,894 | 0.129 |
+| Established | Depo-Provera (medroxyprogesterone) | 179 | 2,293 | 0.128 |
+| New | Bimzelx (bimekizumab) | 0 | 8,439 | 0.264 |
+| New | Nemluvio (nemolizumab) | 0 | 7,161 | 0.257 |
 | New | Kisunla (donanemab) | 0 | 1,361 | 0.246 |
-| New | Cobenfy (xanomeline/trospium) | 0 | 1,255 | 0.232 |
-| New | Winrevair (sotatercept) | 0 | 2,050 | 0.229 |
+| New | Cobenfy (xanomeline/trospium) | 0 | 1,254 | 0.232 |
+| New | Winrevair (sotatercept) | 0 | 2,046 | 0.229 |
 
 The established list is mostly recent launches still ramping up (Orgovyx,
 Nubeqa, Wegovy) and oncology drugs moving into wider use. Depo-Provera is the
@@ -237,18 +238,18 @@ meningioma association was publicised (see question 10).
 
 | Product | Expedited reports (implicated) | Expedited share | 2021 | 2025 |
 |---|---:|---:|---:|---:|
-| Zantac (ranitidine) | 263,211 | 93.6% | 134,627 | 39 |
-| Ranitidine | 124,963 | 97.8% | 95,904 | 603 |
-| Prednisone | 78,529 | 91.0% | 14,646 | 18,090 |
-| Methotrexate | 76,268 | 92.1% | 15,832 | 13,416 |
-| Humira (adalimumab) | 75,241 | 42.9% | 23,406 | 8,881 |
-| Rituximab | 74,397 | 92.4% | 12,454 | 16,389 |
-| Cyclophosphamide | 62,005 | 94.9% | 8,946 | 13,689 |
-| Skyrizi (risankizumab) | 42,360 | 63.3% | 3,183 | 15,274 |
-| Rinvoq (upadacitinib) | 40,362 | 64.7% | 4,178 | 12,019 |
+| Zantac (ranitidine) | 263,193 | 93.6% | 134,627 | 39 |
+| Ranitidine | 124,906 | 97.8% | 95,899 | 593 |
+| Prednisone | 75,147 | 90.7% | 14,467 | 17,012 |
+| Humira (adalimumab) | 74,868 | 42.8% | 23,375 | 8,814 |
+| Methotrexate | 73,591 | 91.9% | 15,699 | 12,610 |
+| Rituximab | 71,377 | 92.2% | 12,323 | 15,483 |
+| Cyclophosphamide | 58,195 | 94.7% | 8,750 | 12,722 |
+| Skyrizi (risankizumab) | 42,339 | 63.3% | 3,183 | 15,271 |
+| Rinvoq (upadacitinib) | 40,247 | 64.6% | 4,172 | 11,984 |
 
 Expedited reports for Zantac and generic ranitidine together fell from about
-230,000 in 2021 to about 640 in 2025 as the litigation wave passed. Humira's fell as biosimilars took its market,
+230,000 in 2021 to about 630 in 2025 as the litigation wave passed. Humira's fell as biosimilars took its market,
 while its successors in immunology, Skyrizi and Rinvoq, grew three- to
 fivefold.
 
@@ -256,16 +257,16 @@ fivefold.
 
 | Reaction | Reports | Share of all reports | Serious share |
 |---|---:|---:|---:|
-| Drug ineffective | 452,492 | 6.3% | 41.3% |
-| Off label use | 439,647 | 6.1% | 58.6% |
-| Death | 296,702 | 4.1% | 99.3% |
-| Fatigue | 270,207 | 3.8% | 54.2% |
-| Pain | 238,725 | 3.3% | 68.4% |
-| Nausea | 236,877 | 3.3% | 54.7% |
-| Product dose omission issue | 223,949 | 3.1% | 26.9% |
-| Diarrhoea | 222,164 | 3.1% | 56.7% |
-| Headache | 185,242 | 2.6% | 51.6% |
-| Dyspnoea | 173,581 | 2.4% | 70.2% |
+| Drug ineffective | 447,223 | 6.3% | 40.7% |
+| Off label use | 432,801 | 6.1% | 58.0% |
+| Death | 295,011 | 4.1% | 99.3% |
+| Fatigue | 268,087 | 3.8% | 53.9% |
+| Pain | 237,644 | 3.3% | 68.3% |
+| Nausea | 234,485 | 3.3% | 54.3% |
+| Product dose omission issue | 223,502 | 3.1% | 26.9% |
+| Diarrhoea | 219,790 | 3.1% | 56.4% |
+| Headache | 183,726 | 2.6% | 51.3% |
+| Dyspnoea | 171,574 | 2.4% | 69.9% |
 
 The top of the list is not clinical at all: lack of effect, off-label use and
 missed doses are MedDRA terms too, and FAERS records them as reactions.
@@ -279,18 +280,18 @@ are ranked separately, since their growth is mostly their first appearance.
 
 | Cohort | Reaction | 2021 | 2025 | Growth / quarter |
 |---|---|---:|---:|---:|
-| Established | Therapeutic response changed | 193 | 1,610 | 0.162 |
-| Established | Exposure via skin contact | 474 | 7,811 | 0.154 |
-| Established | Meningioma | 175 | 1,779 | 0.153 |
-| Established | Drug diversion | 235 | 1,099 | 0.126 |
-| Established | Dissociation | 346 | 2,088 | 0.115 |
-| Established | Optic ischaemic neuropathy | 105 | 599 | 0.112 |
-| Established | Impaired gastric emptying | 479 | 2,472 | 0.112 |
-| Established | Dermatitis atopic | 3,803 | 15,842 | 0.103 |
+| Established | Therapeutic response changed | 191 | 1,610 | 0.163 |
+| Established | Meningioma | 171 | 1,775 | 0.155 |
+| Established | Exposure via skin contact | 473 | 7,808 | 0.154 |
+| Established | Drug diversion | 234 | 1,099 | 0.127 |
+| Established | Dissociation | 344 | 2,079 | 0.115 |
+| Established | Optic ischaemic neuropathy | 103 | 593 | 0.114 |
+| Established | Impaired gastric emptying | 476 | 2,463 | 0.112 |
+| Established | Dermatitis atopic | 3,799 | 15,831 | 0.103 |
 | New | Rebound atopic dermatitis | 58 | 1,597 | 0.192 |
 | New | Rebound eczema | 82 | 1,385 | 0.179 |
-| New | Eosinophilic oesophagitis | 81 | 981 | 0.166 |
-| New | Brain fog | 0 | 4,821 | 0.149 |
+| New | Eosinophilic oesophagitis | 81 | 980 | 0.166 |
+| New | Brain fog | 0 | 4,719 | 0.148 |
 
 Most of these trace back to a handful of drugs; the one most often co-reported
 with each reaction, from the signal mart:
@@ -309,14 +310,14 @@ with each reaction, from the signal mart:
 
 | Outcome | 2021 reactions | 2025 reactions | 2021 share | 2025 share | Growth / quarter |
 |---|---:|---:|---:|---:|---:|
-| Fatal | 182,336 | 259,435 | 4.2% | 6.0% | +0.024 |
-| Recovering / resolving | 243,850 | 316,227 | 5.6% | 7.3% | +0.017 |
-| Recovered / resolved | 555,494 | 587,339 | 12.8% | 13.5% | +0.003 |
-| Unknown | 2,496,186 | 2,425,610 | 57.5% | 55.7% | −0.002 |
-| Not recovered / not resolved | 643,554 | 594,440 | 14.8% | 13.7% | −0.008 |
-| Not reported | 206,767 | 157,561 | 4.8% | 3.6% | −0.019 |
+| Fatal | 181,082 | 253,826 | 4.2% | 5.9% | +0.023 |
+| Recovering / resolving | 241,537 | 307,847 | 5.6% | 7.2% | +0.016 |
+| Recovered / resolved | 551,138 | 572,501 | 12.7% | 13.3% | +0.002 |
+| Unknown | 2,487,678 | 2,400,032 | 57.5% | 55.9% | −0.003 |
+| Not recovered / not resolved | 641,137 | 587,255 | 14.8% | 13.7% | −0.008 |
+| Not reported | 206,661 | 157,205 | 4.8% | 3.7% | −0.020 |
 
-Fatal outcomes grew fastest, up 42% in count and from 4.2% to 6.0% of reactions
+Fatal outcomes grew fastest, up 40% in count and from 4.2% to 5.9% of reactions
 while total volume fell. Part of this is better outcome reporting: "not
 reported" shrank over the same period.
 
@@ -328,13 +329,13 @@ lower bound of the PRR's 95% confidence interval:
 
 | Product | Reaction | Cases | PRR | PRR lower 95% |
 |---|---|---:|---:|---:|
-| ParaGard (copper IUD) | Reproductive complication associated with device | 3,324 | 3,029,000 | 189,400 |
-| ParaGard (copper IUD) | Foreign body in reproductive tract | 6,317 | 112,900 | 76,520 |
-| Belantamab mafodotin | Keratopathy | 800 | 8,261 | 7,303 |
-| Viread (tenofovir DF) | Skeletal injury | 7,185 | 5,515 | 5,110 |
-| Elmiron (pentosan polysulfate) | Maculopathy | 1,291 | 5,476 | 4,984 |
-| Depo-Provera | Meningioma | 1,613 | 2,724 | 2,550 |
-| Oxbryta (voxelotor) | Sickle cell anaemia with crisis | 9,662 | 1,821 | 1,740 |
+| ParaGard (copper IUD) | Reproductive complication associated with device | 3,324 | 2,995,000 | 187,300 |
+| ParaGard (copper IUD) | Foreign body in reproductive tract | 6,317 | 111,600 | 75,650 |
+| Belantamab mafodotin | Keratopathy | 795 | 8,317 | 7,348 |
+| Viread (tenofovir DF) | Skeletal injury | 7,173 | 5,498 | 5,094 |
+| Elmiron (pentosan polysulfate) | Maculopathy | 1,291 | 5,476 | 4,982 |
+| Depo-Provera | Meningioma | 1,613 | 2,755 | 2,578 |
+| Oxbryta (voxelotor) | Sickle cell anaemia with crisis | 9,287 | 1,794 | 1,713 |
 
 These are textbook: ParaGard arm breakage (the subject of litigation),
 belantamab's boxed warning for corneal damage, tenofovir disoproxil's bone
@@ -404,8 +405,8 @@ restricts a dev run to a single quarter.
 | Layer | Models | Job |
 |---|---|---|
 | Staging | `stg_reports`, `stg_demographics`, `stg_drugs`, `stg_reaction`, `stg_deleted_cases` | Rename, cast, decode FAERS codes into readable values through seed mappings (country, route, units, reaction groups) |
-| Intermediate | `int_reports`, `int_demographics`, `int_drugs`, `int_reactions` | One row per report: consolidate versions, drop FDA retractions, resolve conflicting values |
-| Marts: star | `fct_report`, `fct_report_drug`, `fct_report_reaction`, `dim_drug`, `dim_reaction`, `dim_date`, `dim_country` | The report is the spine; drugs and reactions hang off it at their own grain |
+| Intermediate | `int_reports`, `int_demographics`, `int_drugs`, `int_reactions`, `int_linked_reports` | One row per report: consolidate versions, drop FDA retractions, resolve conflicting values; identify reports that share a case id |
+| Marts: star | `fct_report`, `fct_report_drug`, `fct_report_reaction`, `dim_drug`, `dim_reaction`, `dim_date`, `dim_country` | The report is the spine (one row per case, linked duplicates collapsed); drugs and reactions hang off it at their own grain |
 | Marts: signal | `brg_drug_reaction`, `mart_drug_reaction_signal` | Every implicated drug × every reaction on a report, and PRR / ROR / χ² with 95% CIs per pair |
 | Marts: aggregates | `agg_drug_quarterly_trend`, `agg_expedited_drug_profile`, `agg_reaction_frequency`, `agg_outcome_trend`, `agg_patient_group_profile` | Pre-counted distinct reports per quarter for the trend questions |
 
@@ -439,9 +440,15 @@ distort a count if handled naively:
   across versions (`MAX_BY(field, IFF(field IS NOT NULL, version, NULL))`)
   rather than letting the latest row win, which would drop details a later
   follow-up left out.
-- **FAERS's `duplicate` columns are not a duplicate flag.** Measured on the
-  data, they are a sender's case-linkage identifier, so nothing is filtered on
-  them. FDA retractions (the deleted-cases file) are excluded.
+- **FAERS's `duplicate` flag is not a duplicate marker, but the block can link
+  duplicates.** Up to 2021Q3 it only restates the sender's own case number, on
+  94% of reports, so filtering on it would delete almost everything. From
+  2021Q4 it often carries *another* system's case id (a regulator's, a
+  literature service's, another company's). Reports sharing one describe the
+  same patient: in groups of 2–5, 99% agree on sex and 97% on age. Those
+  groups are collapsed to their most recently received report, which removes
+  82,548 duplicate reports (1.1%) from the window. FDA retractions (the
+  deleted-cases file) are excluded too.
 - **A drug is listed once per dose.** One report can list the same product
   dozens of times with different doses and dates, so every drug count here is
   `count(distinct report_id)`, never a count of rows.
@@ -484,8 +491,11 @@ distort a count if handled naively:
   AI-assisted and manually reviewed, not MedDRA's official hierarchy (which is
   licensed); every reaction carries a `rule` / `fallback` flag saying how it was
   grouped.
-- **True clinical duplicates are not detected.** The same case reported by a
-  doctor and by a manufacturer appears twice.
+- **Only linked duplicates are removed.** Reports that share a case id are
+  collapsed (see above). The same event reported independently, with no shared
+  id, still appears twice, as do all duplicates before 2021Q4, when FAERS's
+  duplicate block linked nothing; catching those needs probabilistic matching
+  on patient and event details.
 
 ## Running it
 
