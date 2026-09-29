@@ -100,7 +100,9 @@ models:
       filtered population. Restricted to reports published within the analysis
       window (vars mart_start_quarter..mart_end_quarter), which windows every
       mart built on it; the window is lifted while the faers_quarters dev slice
-      is set.
+      is set. Linked duplicates (int_linked_reports) are collapsed to their most
+      recently received report, which also removes the other copies from every
+      fact joined to this table.
     columns:
       - name: report_id
         description: FAERS report identifier. Degenerate dimension — drill through to int_reports for the identifiers and version history not carried here.
@@ -183,6 +185,18 @@ models:
                 max_value: 120
       - name: weight_kg
         description: Reported patient weight in kilograms.
+      - name: merged_duplicate_count
+        description: >
+          How many other reports of the same linked case (int_linked_reports)
+          were collapsed into this one; 0 for a report with no linked copies in
+          the window. count(*) + sum(merged_duplicate_count) gives the report
+          count before deduplication.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: "{{ var('linked_case_max_reports') - 1 }}"
 
   - name: fct_report_drug
     description: >

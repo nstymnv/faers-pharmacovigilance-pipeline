@@ -118,6 +118,8 @@ unit_tests:
           - {report_id: 5, onset_age: -5, age_unit: 'Year'}
           - {report_id: 6, onset_age: 200, age_unit: 'Year'}
           - {report_id: 7, onset_age: 3, age_unit: 'Trimester'}
+      - input: ref('int_linked_reports')
+        rows: []
     expect:
       rows:
         - {report_id: 1, onset_age_years: 45.0}
@@ -127,3 +129,38 @@ unit_tests:
         - {report_id: 5, onset_age_years: null}
         - {report_id: 6, onset_age_years: null}
         - {report_id: 7, onset_age_years: null}
+
+  - name: test_linked_duplicate_collapse
+    model: fct_report
+    description: >
+      Reports 1 and 2 are one linked case: only the more recently received,
+      report 1, survives, and it records that it stands for one other report.
+      Reports 3 and 4 are a linked case whose later copy, report 4, was
+      published after the analysis window; report 3 must survive rather than
+      the case dropping out of the window. Report 5 is unlinked and untouched.
+    # The window filter is lifted while the faers_quarters dev slice is set,
+    # as it is in CI, and this test is about the window, so it pins the var.
+    overrides:
+      vars:
+        faers_quarters: []
+    given:
+      - input: ref('int_reports')
+        rows:
+          - {report_id: 1, receipt_date: '2023-05-01', first_seen_quarter: '2023q2', last_seen_quarter: '2023q2'}
+          - {report_id: 2, receipt_date: '2023-03-01', first_seen_quarter: '2023q1', last_seen_quarter: '2023q1'}
+          - {report_id: 3, receipt_date: '2025-11-01', first_seen_quarter: '2025q4', last_seen_quarter: '2025q4'}
+          - {report_id: 4, receipt_date: '2026-02-01', first_seen_quarter: '2026q1', last_seen_quarter: '2026q1'}
+          - {report_id: 5, receipt_date: '2023-05-01', first_seen_quarter: '2023q2', last_seen_quarter: '2023q2'}
+      - input: ref('int_demographics')
+        rows: []
+      - input: ref('int_linked_reports')
+        rows:
+          - {report_id: 1, linked_case_id: 'FR-AFSSAPS-001'}
+          - {report_id: 2, linked_case_id: 'FR-AFSSAPS-001'}
+          - {report_id: 3, linked_case_id: 'IN-Wipro-002'}
+          - {report_id: 4, linked_case_id: 'IN-Wipro-002'}
+    expect:
+      rows:
+        - {report_id: 1, merged_duplicate_count: 1}
+        - {report_id: 3, merged_duplicate_count: 0}
+        - {report_id: 5, merged_duplicate_count: 0}
