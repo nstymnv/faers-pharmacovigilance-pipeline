@@ -237,6 +237,10 @@ models:
                 values: ["rule", "fallback"]
               config:
                 severity: warn
+      - name: source_quarter
+        description: "FAERS quarter this reaction was loaded from, e.g. 2021q4. Lets int_reactions keep one publication of a report version that FDA republished in a later quarter."
+        data_tests:
+          - not_null
 
   - name: stg_reports
     description: "Model for cleaning and transforming the FAERS reports data"

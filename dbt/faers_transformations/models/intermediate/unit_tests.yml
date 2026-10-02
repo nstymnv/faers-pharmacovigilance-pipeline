@@ -10,8 +10,8 @@ unit_tests:
       Report 1 has two versions. Version 2 omits source_country and
       company_number, so both must come from version 1, while serious, which
       version 2 does supply, must come from version 2 even though it changed.
-      Version 2 is also republished in 2020q3 with a later transmission date:
-      that copy must win the per-version dedupe and extend the quarter span, but
+      Version 2 is also republished in 2020q3: that later publication must win
+      the per-version dedupe and extend the quarter span, but
       not count as a third version. Report 2 is retracted and must disappear.
       Report 3 has one version and passes through.
     given:
@@ -33,7 +33,7 @@ unit_tests:
     expect:
       rows:
         # receipt_date comes from the 2020q3 copy of version 2: the per-version
-        # dedupe keeps the latest transmission.
+        # dedupe keeps the latest publication.
         - {report_id: 1, version: 2, first_seen_quarter: '2020q1', last_seen_quarter: '2020q3',
            receipt_date: '2020-04-03', source_country: 'US', serious: 'no', company_number: 'A-1'}
         - {report_id: 3, version: 1, first_seen_quarter: '2020q2', last_seen_quarter: '2020q2',
@@ -47,7 +47,8 @@ unit_tests:
       one sex missing). B does not: the sexes conflict. C does not: six reports
       is above linked_case_max_reports, the shape of a literature article
       covering several patients. D does not: a single report links to nothing.
-      Report 12 has no duplicate block at all.
+      Report 12 has no duplicate block at all. E qualifies: a sex coded
+      'unknown' is not a known sex and does not conflict with 'male'.
     given:
       - input: ref('int_reports')
         rows:
@@ -63,13 +64,19 @@ unit_tests:
           - {report_id: 10, duplicate_numb: 'C'}
           - {report_id: 11, duplicate_numb: 'D'}
           - {report_id: 12, duplicate_numb: null}
+          - {report_id: 13, duplicate_numb: 'E'}
+          - {report_id: 14, duplicate_numb: 'E'}
       - input: ref('int_demographics')
         rows:
           - {report_id: 1, sex: 'female', onset_age: 60, age_unit: 'Year'}
           - {report_id: 2, sex: null, onset_age: 720, age_unit: 'Month'}
           - {report_id: 3, sex: 'female', onset_age: 40, age_unit: 'Year'}
           - {report_id: 4, sex: 'male', onset_age: 40, age_unit: 'Year'}
+          - {report_id: 13, sex: 'male', onset_age: 55, age_unit: 'Year'}
+          - {report_id: 14, sex: 'unknown', onset_age: 55, age_unit: 'Year'}
     expect:
       rows:
         - {report_id: 1, linked_case_id: 'A'}
         - {report_id: 2, linked_case_id: 'A'}
+        - {report_id: 13, linked_case_id: 'E'}
+        - {report_id: 14, linked_case_id: 'E'}

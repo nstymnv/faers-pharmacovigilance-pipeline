@@ -10,7 +10,8 @@ normalized as (
         safetyreportversion as version,
         initcap(trim(cast(reactionmeddrapt as string))) as reaction,
         try_cast(reactionmeddraversionpt as float) as meddra_version,
-        try_cast(reactionoutcome as int) as outcome
+        try_cast(reactionoutcome as int) as outcome,
+        source_quarter
     from source
     where
         {{ faers_quarter_filter() }}
@@ -31,7 +32,8 @@ standardized as (
             when outcome = 4 then 'recovered/resolved with sequelae'
             when outcome = 5 then 'fatal'
             when outcome = 6 then 'unknown'
-        end as outcome
+        end as outcome,
+        source_quarter
     from normalized
 ),
 

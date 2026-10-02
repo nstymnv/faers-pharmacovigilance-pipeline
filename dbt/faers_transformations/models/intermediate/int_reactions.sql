@@ -11,10 +11,16 @@
 -- faers_outcome_severity macro for the ranking and the reasoning.
 with latest_version as (
 
+    -- FDA occasionally republishes the same version in a later quarter. The
+    -- most recent publication wins, as in int_drugs: keeping both would union
+    -- the two reaction lists and revive a reaction the republication dropped.
     select *
     from {{ ref('stg_reaction') }}
 
-    qualify version = max(version) over (partition by report_id)
+    qualify dense_rank() over (
+        partition by report_id
+        order by version desc, source_quarter desc
+    ) = 1
 
 ),
 

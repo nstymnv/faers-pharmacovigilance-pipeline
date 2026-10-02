@@ -160,10 +160,15 @@ def faers_quarterly():
             return params["quarters"]
 
         hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID)
+        # Done means the quarter's latest attempt of any kind is a successful
+        # load. An earlier one does not count: a later failed reload leaves the
+        # RAW tables half replaced, and a later re-stage leaves them stale.
         loaded = {
             row[0]
             for row in hook.get_records(
-                "select distinct quarter_key from extraction.ingestion_log where status = %s",
+                "select quarter_key from extraction.ingestion_log"
+                " qualify row_number() over (partition by quarter_key order by ended_at desc) = 1"
+                " and status = %s",
                 parameters=(LOADED_STATUS,),
             )
         }
@@ -214,7 +219,7 @@ def faers_quarterly():
             env = {
                 **os.environ,
                 **snowflake_environment(),
-                "PYTHONPATH": f"{PROJECT_DIR}/src",
+                "PYTHONPATH": PROJECT_DIR,
             }
             command = [INGESTION_PYTHON, "-m", "faers_ingestion.main", "--quarters", quarter_key]
 

@@ -7,6 +7,10 @@
 -- quarter, rather than comparing two end years, ranks steady growth above a
 -- single spike. Quarters with no reports count as zero.
 --
+-- Only implicated reports are counted (the drug named suspect or interacting).
+-- Counting every role would rank a widely co-prescribed drug as increasing on
+-- reports it is not suspected in.
+--
 -- Two cohorts, ranked separately:
 -- - established: at least min_first_year_reports in the window's first year.
 --   Growth here is a change in an existing drug's reporting.
@@ -14,6 +18,12 @@
 --   growth is largely the launch itself, which would otherwise fill the whole
 --   list.
 -- Drugs with fewer than min_window_reports in total are not ranked.
+--
+-- A drug here is a product name, across every active-substance spelling it was
+-- reported under. dim_drug is product x substance, and senders changed the
+-- substance string of existing products mid-window (KISQALI from RIBOCICLIB to
+-- RIBOCICLIB SUCCINATE in 2025), which made an old product look like a new
+-- entrant with zero reports in the first year.
 --
 -- Report volume across FAERS as a whole fell slightly over the window
 -- (00_report_volume_by_year.sql), so growth here is not a tide lifting all drugs.
@@ -37,30 +47,50 @@ with quarters as (
 
 ),
 
-drugs as (
+-- Counted per product name from the report-level fact, not from the
+-- (product, substance) rows of agg_drug_quarterly_trend: summing those would
+-- count a report twice when it lists one product under two substance spellings.
+product_quarterly as (
 
-    select drug_key
-    from faers_db.mart.agg_drug_quarterly_trend
-    where year_quarter between $window_start and $window_end
-    group by drug_key
+    select
+        d.medicinal_product,
+        t.year_quarter,
+        count(distinct f.report_id) as report_count
+    from faers_db.mart.fct_report_drug as f
+    inner join faers_db.mart.dim_drug as d
+        on f.drug_key = d.drug_key
+    inner join faers_db.mart.dim_date as t
+        on f.receipt_date_key = t.date_key
+    where
+        f.is_implicated
+        and t.year_quarter between $window_start and $window_end
+    group by d.medicinal_product, t.year_quarter
+
+),
+
+products as (
+
+    select medicinal_product
+    from product_quarterly
+    group by medicinal_product
     having sum(report_count) >= $min_window_reports
 
 ),
 
--- Every drug x every quarter, so a quarter without reports is a zero in the
+-- Every product x every quarter, so a quarter without reports is a zero in the
 -- regression rather than a missing point.
 quarterly as (
 
     select
-        d.drug_key,
+        p.medicinal_product,
         q.quarter_index,
         q.quarter_count,
         coalesce(a.report_count, 0) as report_count
-    from drugs as d
+    from products as p
     cross join quarters as q
-    left join faers_db.mart.agg_drug_quarterly_trend as a
+    left join product_quarterly as a
         on
-            d.drug_key = a.drug_key
+            p.medicinal_product = a.medicinal_product
             and q.year_quarter = a.year_quarter
 
 ),
@@ -68,27 +98,38 @@ quarterly as (
 growth as (
 
     select
-        drug_key,
+        medicinal_product,
         sum(report_count) as window_reports,
         sum(iff(quarter_index < 4, report_count, 0)) as first_year_reports,
         sum(iff(quarter_index >= quarter_count - 4, report_count, 0)) as last_year_reports,
         regr_slope(report_count, quarter_index) / avg(report_count) as relative_growth_per_quarter
     from quarterly
-    group by drug_key
+    group by medicinal_product
+
+),
+
+product_substances as (
+
+    select
+        medicinal_product,
+        listagg(distinct active_substance, '; ') within group (order by active_substance)
+            as active_substances
+    from faers_db.mart.dim_drug
+    group by medicinal_product
 
 )
 
 select
     iff(g.first_year_reports >= $min_first_year_reports, 'established', 'new entrant') as cohort,
-    d.medicinal_product,
-    d.active_substance,
+    g.medicinal_product,
+    s.active_substances,
     g.first_year_reports,
     g.last_year_reports,
     g.window_reports,
     round(g.relative_growth_per_quarter, 3) as relative_growth_per_quarter
 from growth as g
-inner join faers_db.mart.dim_drug as d
-    on g.drug_key = d.drug_key
+inner join product_substances as s
+    on g.medicinal_product = s.medicinal_product
 qualify
     row_number() over (partition by cohort order by g.relative_growth_per_quarter desc)
     <= $top_n
