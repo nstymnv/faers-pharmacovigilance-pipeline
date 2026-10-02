@@ -9,6 +9,8 @@ with ranked_versions as (
     -- The quarter span is taken before the qualify below, which keeps one
     -- row per version: FDA can republish the same version in a later quarter,
     -- and that later appearance still counts as the report being seen there.
+    -- The most recent publication wins, as in int_drugs and int_reactions, so
+    -- all three describe the same publication of a report.
     select
         *,
         min(source_quarter) over (partition by report_id) as first_seen_quarter,
@@ -17,7 +19,7 @@ with ranked_versions as (
 
     qualify row_number() over (
         partition by report_id, version
-        order by transmission_date desc
+        order by source_quarter desc, transmission_date desc nulls last
     ) = 1
 
 ),

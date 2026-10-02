@@ -43,7 +43,8 @@ linked_cases as (
     group by linked_case_id
     having
         count(*) between 2 and {{ var('linked_case_max_reports') }}
-        and count(distinct sex) <= 1
+        -- 'unknown' is a coded value, not a known sex, so it cannot conflict.
+        and count(distinct nullif(sex, 'unknown')) <= 1
         and count(distinct age_years) <= 1
 
 )
