@@ -23,14 +23,163 @@ business questions with plain SQL in [`queries/`](queries/).
 
 ## Contents
 
-- [Business questions](#business-questions)
-- [Findings](#findings)
 - [Architecture](#architecture)
 - [Data model](#data-model)
-- [Data quality decisions](#data-quality-decisions)
-- [Limitations](#limitations)
 - [Running it](#running-it)
 - [Repository layout](#repository-layout)
+- [Business questions](#business-questions)
+- [Findings](#findings)
+- [Data quality decisions](#data-quality-decisions)
+- [Limitations](#limitations)
+
+## Architecture
+
+```mermaid
+flowchart LR
+    FDA["FDA FAERS<br/>quarterly XML ZIPs"]
+
+    subgraph Snowflake
+        direction LR
+        SP["Stored procedure<br/>INGEST_FAERS_QUARTER<br/>(external access)"]
+        STAGE[("@FAERS_RAW<br/>internal stage<br/>raw XML archive")]
+        SPARK["PySpark via<br/>Snowpark Connect<br/>(parse + flatten)"]
+        RAW[("RAW<br/>reports · demographics<br/>drug · reaction")]
+        STG[("STAGING<br/>clean + decode")]
+        INT[("INTERMEDIATE<br/>versions merged,<br/>retractions removed")]
+        MART[("MART<br/>star schema,<br/>aggregates, signals")]
+        SP --> STAGE --> SPARK --> RAW --> STG --> INT --> MART
+    end
+
+    FDA --> SP
+    MART --> Q["queries/*.sql"]
+    AF["Airflow (Docker)<br/>orchestration"] -.-> SP
+    AF -.-> SPARK
+    AF -.-> STG
+```
+
+1. **Stage** — `extraction.ingest_faers_quarter`
+   ([`sprocs/ingest_faers_quarter.py`](src/faers_ingestion/sprocs/ingest_faers_quarter.py))
+   is a Python stored procedure with an external access integration limited to
+   `fis.fda.gov`. It streams a quarter's ZIP and writes each XML file to the
+   `@FAERS_RAW` stage uncompressed, so the raw zone can be re-parsed without
+   downloading from FDA again. It handles FDA's Deflate64-compressed quarters,
+   which Python's `zipfile` cannot read, and logs every attempt to
+   `EXTRACTION.INGESTION_LOG`.
+2. **Load** — [`faers_ingestion.main`](src/faers_ingestion/main.py) runs PySpark
+   DataFrame code on warehouse compute through Snowpark Connect for Spark: no
+   local Spark, JVM or cluster. It reads the staged XML with a fixed schema
+   ([`safetyreport_schema.json`](src/faers_ingestion/extract/safetyreport_schema.json)),
+   first scanning each quarter for elements the schema doesn't know
+   ([`schema_drift.py`](src/faers_ingestion/extract/schema_drift.py)), since FDA
+   adds fields over time and an unknown element breaks the load with a
+   misleading error. It then flattens the nested `safetyreport` into four RAW
+   tables.
+3. **Transform** — dbt ([`dbt/faers_transformations`](dbt/faers_transformations))
+   builds staging → intermediate → marts, all as tables in their own schemas.
+4. **Orchestrate** — [`faers_quarterly`](docker/airflow/dags/faers_quarterly.py)
+   finds quarters not yet loaded, then stages and loads each one, and runs dbt
+   through Cosmos with one Airflow task per model and its tests. The backfill
+   goes through the same DAG, capped by a `max_quarters` parameter so an
+   accidental trigger costs one quarter's credits. Airflow only issues
+   commands; all compute is Snowflake's.
+
+**Cost guardrails:** an XSMALL warehouse with 60-second auto-suspend, a
+monthly resource monitor (`sql/04`), and a `faers_quarters` dbt var that
+restricts a dev run to a single quarter.
+
+## Data model
+
+| Layer | Models | Job |
+|---|---|---|
+| Staging | `stg_reports`, `stg_demographics`, `stg_drugs`, `stg_reaction`, `stg_deleted_cases` | Rename, cast, decode FAERS codes into readable values through seed mappings (country, route, units, reaction groups) |
+| Intermediate | `int_reports`, `int_demographics`, `int_drugs`, `int_reactions`, `int_linked_reports` | One row per report: consolidate versions, drop FDA retractions, resolve conflicting values; identify reports that share a case id |
+| Marts: star | `fct_report`, `fct_report_drug`, `fct_report_reaction`, `dim_drug`, `dim_reaction`, `dim_date`, `dim_country` | The report is the spine (one row per case, linked duplicates collapsed); drugs and reactions hang off it at their own grain |
+| Marts: signal | `brg_drug_reaction`, `mart_drug_reaction_signal` | Every implicated drug × every reaction on a report, and PRR / ROR / χ² with 95% CIs per pair |
+| Marts: aggregates | `agg_drug_quarterly_trend`, `agg_expedited_drug_profile`, `agg_reaction_frequency`, `agg_outcome_trend`, `agg_patient_group_profile` | Pre-counted distinct reports per quarter for the trend questions |
+
+The design reasoning, with the measurements behind each decision, is in
+[`dbt/faers_transformations/models/README.md`](dbt/faers_transformations/models/README.md).
+Model and column descriptions are pushed into Snowflake comments
+(`persist_docs`), so they show up when browsing `MART` directly.
+
+**Tests:** schema tests on keys and relationships, accepted values and ranges;
+singular tests that cross-check the marts against each other (e.g. the four
+contingency cells of every signal pair sum to the universe); dbt unit tests on
+the trickiest logic (PRR/ROR math, dose-entry collapse, onset-age
+normalization, the report version merge); a warning test for reaction terms
+missing from the reaction-group seed; and pytest tests for the ingestion code
+that runs without Snowflake (quarter parsing, config, the procedure's ZIP
+handling). More in [`dbt/faers_transformations/README.md`](dbt/faers_transformations/README.md).
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): ruff, pytest and
+sqlfluff on `queries/` run on every push. `dbt build` on the 2020q1 slice, then
+sqlfluff over the dbt project, runs on pull requests into `main` and on demand,
+as a least-privilege `FAERS_CI` service user that can only read `RAW` and write
+to `CI_STAGING`/`CI_INTERMEDIATE`/`CI_MART`, never the real layers.
+
+## Running it
+
+**Prerequisites:** a Snowflake account (the scripts assume a role that can
+create a database, a warehouse and one external access integration), Python
+3.12, and Docker if you want Airflow.
+
+1. **Bootstrap Snowflake** by running the scripts in [`sql/`](sql/) in order in
+   a worksheet: database, schemas, warehouse, resource monitor, then the stage,
+   network rule, ingestion log and FDA external access integration (01–05).
+   `06` creates the CI identity and is only needed for CI. All are idempotent.
+2. **Configure** — copy `.env.example` to `.env` and fill in the account, user,
+   role and path to a key-pair private key (key-pair auth only).
+3. **Install:**
+   ```bash
+   python -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt -r requirements-dbt.txt && pip install -e .
+   pip install -r requirements-dev.txt   # optional: ruff, sqlfluff, pytest
+   ```
+4. **Deploy the ingestion procedure, then stage and load a quarter:**
+   ```bash
+   python -m faers_ingestion.sprocs.deploy
+   python -m faers_ingestion.main --quarters 2021q1 --ingest
+   ```
+5. **Build the warehouse:**
+   ```bash
+   cd dbt/faers_transformations
+   dbt deps && dbt seed && dbt build
+   ```
+   For a quick dev run on one quarter: `dbt build --vars '{faers_quarters: [2020q1]}'`.
+6. **Or run it all from Airflow:** fill in `docker/airflow/.env` from its
+   example, then `docker compose up -d` in `docker/airflow/` and trigger
+   `faers_quarterly` (raise `max_quarters` for a backfill).
+7. **Answer the questions:** open any file in [`queries/`](queries/) in a
+   Snowflake worksheet and run it.
+8. **Checks:** `pytest`, `ruff check src test`, `sqlfluff lint queries/`, and
+   `sqlfluff lint models tests analyses` from `dbt/faers_transformations`. For
+   CI's dbt job, run `sql/06_create_ci_identity.sql` and add the GitHub secrets
+   `SNOWFLAKE_ACCOUNT` and `FAERS_CI_PRIVATE_KEY` (the PEM text of the CI key).
+
+## Repository layout
+
+```
+queries/                    business-question SQL, one file per question
+src/faers_ingestion/
+  sprocs/                   in-Snowflake download-and-stage procedure + deploy script
+  extract/                  Snowpark Connect session, XML schema, drift check
+  load/                     flatten to RAW tables, deleted-cases load
+  main.py                   stage → load entry point
+dbt/faers_transformations/
+  models/staging|intermediate|marts
+  models/README.md          modelling decisions and the measurements behind them
+  seeds/                    code mappings (country, route, units, reaction groups)
+  tests/                    cross-model consistency tests
+  ci/                       dbt profile and sqlfluff config for CI
+docker/airflow/             Airflow on Docker Compose + the quarterly DAG
+sql/                        one-time Snowflake bootstrap scripts (06 = CI identity)
+test/                       pytest tests for the ingestion package
+.github/workflows/ci.yml    lint, tests, dbt build on the dev slice
+```
+
+**Stack:** Snowflake (stages, stored procedures, external access, Snowpark
+Connect for Spark), PySpark, dbt Core + dbt-utils, Apache Airflow + Astronomer
+Cosmos, Docker Compose, GitHub Actions, ruff, sqlfluff, pytest.
 
 ## Business questions
 
@@ -345,90 +494,7 @@ deaths. PRRs this large mean the reaction is almost never reported *without*
 the drug. Further down, a few pairs come from clusters of near-identical reports
 (phthalylsulfathiazole, desoximetasone) rather than pharmacology.
 
-## Architecture
 
-```mermaid
-flowchart LR
-    FDA["FDA FAERS<br/>quarterly XML ZIPs"]
-
-    subgraph Snowflake
-        direction LR
-        SP["Stored procedure<br/>INGEST_FAERS_QUARTER<br/>(external access)"]
-        STAGE[("@FAERS_RAW<br/>internal stage<br/>raw XML archive")]
-        SPARK["PySpark via<br/>Snowpark Connect<br/>(parse + flatten)"]
-        RAW[("RAW<br/>reports · demographics<br/>drug · reaction")]
-        STG[("STAGING<br/>clean + decode")]
-        INT[("INTERMEDIATE<br/>versions merged,<br/>retractions removed")]
-        MART[("MART<br/>star schema,<br/>aggregates, signals")]
-        SP --> STAGE --> SPARK --> RAW --> STG --> INT --> MART
-    end
-
-    FDA --> SP
-    MART --> Q["queries/*.sql"]
-    AF["Airflow (Docker)<br/>orchestration"] -.-> SP
-    AF -.-> SPARK
-    AF -.-> STG
-```
-
-1. **Stage** — `extraction.ingest_faers_quarter`
-   ([`sprocs/ingest_faers_quarter.py`](src/faers_ingestion/sprocs/ingest_faers_quarter.py))
-   is a Python stored procedure with an external access integration limited to
-   `fis.fda.gov`. It streams a quarter's ZIP and writes each XML file to the
-   `@FAERS_RAW` stage uncompressed, so the raw zone can be re-parsed without
-   downloading from FDA again. It handles FDA's Deflate64-compressed quarters,
-   which Python's `zipfile` cannot read, and logs every attempt to
-   `EXTRACTION.INGESTION_LOG`.
-2. **Load** — [`faers_ingestion.main`](src/faers_ingestion/main.py) runs PySpark
-   DataFrame code on warehouse compute through Snowpark Connect for Spark: no
-   local Spark, JVM or cluster. It reads the staged XML with a fixed schema
-   ([`safetyreport_schema.json`](src/faers_ingestion/extract/safetyreport_schema.json)),
-   first scanning each quarter for elements the schema doesn't know
-   ([`schema_drift.py`](src/faers_ingestion/extract/schema_drift.py)), since FDA
-   adds fields over time and an unknown element breaks the load with a
-   misleading error. It then flattens the nested `safetyreport` into four RAW
-   tables.
-3. **Transform** — dbt ([`dbt/faers_transformations`](dbt/faers_transformations))
-   builds staging → intermediate → marts, all as tables in their own schemas.
-4. **Orchestrate** — [`faers_quarterly`](docker/airflow/dags/faers_quarterly.py)
-   finds quarters not yet loaded, then stages and loads each one, and runs dbt
-   through Cosmos with one Airflow task per model and its tests. The backfill
-   goes through the same DAG, capped by a `max_quarters` parameter so an
-   accidental trigger costs one quarter's credits. Airflow only issues
-   commands; all compute is Snowflake's.
-
-**Cost guardrails:** an XSMALL warehouse with 60-second auto-suspend, a
-monthly resource monitor (`sql/04`), and a `faers_quarters` dbt var that
-restricts a dev run to a single quarter.
-
-## Data model
-
-| Layer | Models | Job |
-|---|---|---|
-| Staging | `stg_reports`, `stg_demographics`, `stg_drugs`, `stg_reaction`, `stg_deleted_cases` | Rename, cast, decode FAERS codes into readable values through seed mappings (country, route, units, reaction groups) |
-| Intermediate | `int_reports`, `int_demographics`, `int_drugs`, `int_reactions`, `int_linked_reports` | One row per report: consolidate versions, drop FDA retractions, resolve conflicting values; identify reports that share a case id |
-| Marts: star | `fct_report`, `fct_report_drug`, `fct_report_reaction`, `dim_drug`, `dim_reaction`, `dim_date`, `dim_country` | The report is the spine (one row per case, linked duplicates collapsed); drugs and reactions hang off it at their own grain |
-| Marts: signal | `brg_drug_reaction`, `mart_drug_reaction_signal` | Every implicated drug × every reaction on a report, and PRR / ROR / χ² with 95% CIs per pair |
-| Marts: aggregates | `agg_drug_quarterly_trend`, `agg_expedited_drug_profile`, `agg_reaction_frequency`, `agg_outcome_trend`, `agg_patient_group_profile` | Pre-counted distinct reports per quarter for the trend questions |
-
-The design reasoning, with the measurements behind each decision, is in
-[`dbt/faers_transformations/models/README.md`](dbt/faers_transformations/models/README.md).
-Model and column descriptions are pushed into Snowflake comments
-(`persist_docs`), so they show up when browsing `MART` directly.
-
-**Tests:** schema tests on keys and relationships, accepted values and ranges;
-singular tests that cross-check the marts against each other (e.g. the four
-contingency cells of every signal pair sum to the universe); dbt unit tests on
-the trickiest logic (PRR/ROR math, dose-entry collapse, onset-age
-normalization, the report version merge); a warning test for reaction terms
-missing from the reaction-group seed; and pytest tests for the ingestion code
-that runs without Snowflake (quarter parsing, config, the procedure's ZIP
-handling). More in [`dbt/faers_transformations/README.md`](dbt/faers_transformations/README.md).
-
-**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): ruff, pytest and
-sqlfluff on `queries/` run on every push. `dbt build` on the 2020q1 slice, then
-sqlfluff over the dbt project, runs on pull requests into `main` and on demand,
-as a least-privilege `FAERS_CI` service user that can only read `RAW` and write
-to `CI_STAGING`/`CI_INTERMEDIATE`/`CI_MART`, never the real layers.
 
 ## Data quality decisions
 
@@ -497,66 +563,4 @@ distort a count if handled naively:
   duplicate block linked nothing; catching those needs probabilistic matching
   on patient and event details.
 
-## Running it
 
-**Prerequisites:** a Snowflake account (the scripts assume a role that can
-create a database, a warehouse and one external access integration), Python
-3.12, and Docker if you want Airflow.
-
-1. **Bootstrap Snowflake** by running the scripts in [`sql/`](sql/) in order in
-   a worksheet: database, schemas, warehouse, resource monitor, then the stage,
-   network rule, ingestion log and FDA external access integration (01–05).
-   `06` creates the CI identity and is only needed for CI. All are idempotent.
-2. **Configure** — copy `.env.example` to `.env` and fill in the account, user,
-   role and path to a key-pair private key (key-pair auth only).
-3. **Install:**
-   ```bash
-   python -m venv .venv && source .venv/bin/activate
-   pip install -r requirements.txt -r requirements-dbt.txt && pip install -e .
-   pip install -r requirements-dev.txt   # optional: ruff, sqlfluff, pytest
-   ```
-4. **Deploy the ingestion procedure, then stage and load a quarter:**
-   ```bash
-   python -m faers_ingestion.sprocs.deploy
-   python -m faers_ingestion.main --quarters 2021q1 --ingest
-   ```
-5. **Build the warehouse:**
-   ```bash
-   cd dbt/faers_transformations
-   dbt deps && dbt seed && dbt build
-   ```
-   For a quick dev run on one quarter: `dbt build --vars '{faers_quarters: [2020q1]}'`.
-6. **Or run it all from Airflow:** fill in `docker/airflow/.env` from its
-   example, then `docker compose up -d` in `docker/airflow/` and trigger
-   `faers_quarterly` (raise `max_quarters` for a backfill).
-7. **Answer the questions:** open any file in [`queries/`](queries/) in a
-   Snowflake worksheet and run it.
-8. **Checks:** `pytest`, `ruff check src test`, `sqlfluff lint queries/`, and
-   `sqlfluff lint models tests analyses` from `dbt/faers_transformations`. For
-   CI's dbt job, run `sql/06_create_ci_identity.sql` and add the GitHub secrets
-   `SNOWFLAKE_ACCOUNT` and `FAERS_CI_PRIVATE_KEY` (the PEM text of the CI key).
-
-## Repository layout
-
-```
-queries/                    business-question SQL, one file per question
-src/faers_ingestion/
-  sprocs/                   in-Snowflake download-and-stage procedure + deploy script
-  extract/                  Snowpark Connect session, XML schema, drift check
-  load/                     flatten to RAW tables, deleted-cases load
-  main.py                   stage → load entry point
-dbt/faers_transformations/
-  models/staging|intermediate|marts
-  models/README.md          modelling decisions and the measurements behind them
-  seeds/                    code mappings (country, route, units, reaction groups)
-  tests/                    cross-model consistency tests
-  ci/                       dbt profile and sqlfluff config for CI
-docker/airflow/             Airflow on Docker Compose + the quarterly DAG
-sql/                        one-time Snowflake bootstrap scripts (06 = CI identity)
-test/                       pytest tests for the ingestion package
-.github/workflows/ci.yml    lint, tests, dbt build on the dev slice
-```
-
-**Stack:** Snowflake (stages, stored procedures, external access, Snowpark
-Connect for Spark), PySpark, dbt Core + dbt-utils, Apache Airflow + Astronomer
-Cosmos, Docker Compose, GitHub Actions, ruff, sqlfluff, pytest.
