@@ -30,9 +30,19 @@ class FakeFileOperations:
         )
 
 
+class FakeStatement:
+    def collect(self):
+        return []
+
+
 class FakeSession:
     def __init__(self):
         self.file = FakeFileOperations()
+        self.statements = []
+
+    def sql(self, statement):
+        self.statements.append(statement)
+        return FakeStatement()
 
 
 def build_zip(path, members):
@@ -71,6 +81,21 @@ def test_stages_xml_and_deleted_files_only(tmp_path):
     )
     assert staged["1_ADR21Q1.xml"]["content"] == b"<ichicsr>one</ichicsr>"
     assert staged_bytes == sum(len(put["content"]) for put in session.file.puts)
+
+
+def test_quarter_prefixes_are_cleared_before_staging(tmp_path):
+    # A republished quarter may name its members differently; files left from
+    # the earlier staging would be loaded alongside the new ones.
+    zip_path = tmp_path / "faers.zip"
+    build_zip(zip_path, {"XML/1_ADR21Q1.xml": "<ichicsr/>"})
+    session = FakeSession()
+
+    _stage_members(session, str(zip_path), str(tmp_path), 2021, 1)
+
+    assert session.statements == [
+        "remove @extraction.faers_raw/xml/year=2021/quarter=1/",
+        "remove @extraction.faers_raw/deleted/year=2021/quarter=1/",
+    ]
 
 
 def test_xml_is_staged_uncompressed(tmp_path):

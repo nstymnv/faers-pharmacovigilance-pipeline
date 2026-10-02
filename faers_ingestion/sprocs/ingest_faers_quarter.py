@@ -39,29 +39,39 @@ def _log(session, quarter_key, source_url, status, files, size, started_at, erro
         f"insert into {INGESTION_LOG_TABLE}"
         " (quarter_key, source_url, status, files_staged, bytes_staged,"
         "  started_at, ended_at, error_message)"
+        # The start time goes in as ISO text with its UTC offset and the end time
+        # comes from Snowflake: a bound datetime loses its offset and is read as
+        # session-local time, which put these rows hours after the load rows
+        # main.py writes and broke "latest row" comparisons between the two.
         # nullif: Snowpark binds a Python None as the literal string 'None'.
-        " select ?, ?, ?, ?, ?, ?, ?, nullif(?, '')",
+        " select ?, ?, ?, ?, ?, to_timestamp_ltz(?), current_timestamp(), nullif(?, '')",
         params=[
             quarter_key,
             source_url,
             status,
             files,
             size,
-            started_at,
-            datetime.now(UTC),
+            started_at.isoformat(),
             error or "",
         ],
     ).collect()
 
 
 def _already_succeeded(session, quarter_key: str) -> bool:
+    """Whether the quarter's latest staging attempt succeeded.
+
+    An earlier success does not count: a forced re-stage that failed partway
+    leaves the stage incomplete, and the quarter has to be staged again. The
+    load step's rows (LOADED / LOAD_FAILED) share the table and are ignored.
+    """
     rows = session.sql(
-        f"select count(*) from {INGESTION_LOG_TABLE}"
-        " where quarter_key = ? and status = 'SUCCEEDED'",
+        f"select status from {INGESTION_LOG_TABLE}"
+        " where quarter_key = ? and status in ('SUCCEEDED', 'FAILED')"
+        " order by ended_at desc limit 1",
         params=[quarter_key],
     ).collect()
 
-    return rows[0][0] > 0
+    return bool(rows) and rows[0][0] == "SUCCEEDED"
 
 
 def _download_zip(url: str, destination: str) -> int:
@@ -124,6 +134,12 @@ def _stage_members(session, zip_path: str, work_dir: str, year: int, quarter: in
 
     staged_files = 0
     staged_bytes = 0
+
+    # PUT only overwrites files of the same name. If FDA republishes a quarter
+    # with differently named members, the earlier files would stay and the load
+    # would read both sets.
+    for stage_prefix in (xml_prefix, deleted_prefix):
+        session.sql(f"remove {stage_prefix}/").collect()
 
     with zipfile.ZipFile(zip_path) as archive:
         for info in archive.infolist():

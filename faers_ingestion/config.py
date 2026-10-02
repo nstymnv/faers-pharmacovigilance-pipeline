@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # FAERS quarterly archives follow a stable URL pattern, so quarters are addressed
 # directly. The FAERS index page renders its file list client-side, which is why

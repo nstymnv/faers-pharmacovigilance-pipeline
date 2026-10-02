@@ -9,7 +9,7 @@ description = "Snowflake-native ingestion for FDA FAERS adverse event reports"
 requires-python = ">=3.10,<3.13"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+include = ["faers_ingestion*"]
 
 [tool.ruff]
 line-length = 100
@@ -17,5 +17,5 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
-# Import faers_ingestion from src/ without requiring `pip install -e .` first.
-pythonpath = ["src"]
+# Import faers_ingestion from the repo root without requiring `pip install -e .` first.
+pythonpath = ["."]

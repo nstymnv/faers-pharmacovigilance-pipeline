@@ -95,7 +95,7 @@ def unknown_elements(conn, year: int, quarter: int) -> list[str]:
     """Element names in the quarter's staged XML that the schema does not declare.
 
     Runs in Snowflake over the staged files as plain text lines, one pass per
-    quarter.
+    quarter. Raises FileNotFoundError when the quarter has no staged XML.
     """
     cursor = conn.cursor()
     _create_lines_file_format(cursor)
@@ -112,6 +112,14 @@ def unknown_elements(conn, year: int, quarter: int) -> list[str]:
     ).fetchall()
 
     found = {row[0] for row in rows}
+    # Nothing staged also means nothing unknown, so without this the check would
+    # pass and the load would replace the quarter's rows with an empty read.
+    if not found:
+        raise FileNotFoundError(
+            f"no XML is staged at {stage_xml_prefix(year, quarter)}; "
+            "stage the quarter first (--ingest)"
+        )
+
     known = schema_element_names(safetyreport_schema()) | ENVELOPE_ELEMENTS
     unknown = sorted(found - known)
 

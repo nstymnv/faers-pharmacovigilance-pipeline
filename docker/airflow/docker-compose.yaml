@@ -36,7 +36,7 @@ x-airflow-common:
     - ./logs:/opt/airflow/logs
     # The code is mounted rather than copied into the image, so a change to the
     # ingestion package or a dbt model needs no rebuild.
-    - ../../src:/opt/airflow/project/src:ro
+    - ../../faers_ingestion:/opt/airflow/project/faers_ingestion:ro
     - ../../dbt/faers_transformations:/opt/airflow/project/dbt/faers_transformations
     - ../../keys:/opt/airflow/keys:ro
   user: "${AIRFLOW_UID:-50000}:0"

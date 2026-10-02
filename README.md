@@ -58,19 +58,19 @@ flowchart LR
 ```
 
 1. **Stage** — `extraction.ingest_faers_quarter`
-   ([`sprocs/ingest_faers_quarter.py`](src/faers_ingestion/sprocs/ingest_faers_quarter.py))
+   ([`sprocs/ingest_faers_quarter.py`](faers_ingestion/sprocs/ingest_faers_quarter.py))
    is a Python stored procedure with an external access integration limited to
    `fis.fda.gov`. It streams a quarter's ZIP and writes each XML file to the
    `@FAERS_RAW` stage uncompressed, so the raw zone can be re-parsed without
    downloading from FDA again. It handles FDA's Deflate64-compressed quarters,
    which Python's `zipfile` cannot read, and logs every attempt to
    `EXTRACTION.INGESTION_LOG`.
-2. **Load** — [`faers_ingestion.main`](src/faers_ingestion/main.py) runs PySpark
+2. **Load** — [`faers_ingestion.main`](faers_ingestion/main.py) runs PySpark
    DataFrame code on warehouse compute through Snowpark Connect for Spark: no
    local Spark, JVM or cluster. It reads the staged XML with a fixed schema
-   ([`safetyreport_schema.json`](src/faers_ingestion/extract/safetyreport_schema.json)),
+   ([`safetyreport_schema.json`](faers_ingestion/extract/safetyreport_schema.json)),
    first scanning each quarter for elements the schema doesn't know
-   ([`schema_drift.py`](src/faers_ingestion/extract/schema_drift.py)), since FDA
+   ([`schema_drift.py`](faers_ingestion/extract/schema_drift.py)), since FDA
    adds fields over time and an unknown element breaks the load with a
    misleading error. It then flattens the nested `safetyreport` into four RAW
    tables.
@@ -151,7 +151,7 @@ create a database, a warehouse and one external access integration), Python
    `faers_quarterly` (raise `max_quarters` for a backfill).
 7. **Answer the questions:** open any file in [`queries/`](queries/) in a
    Snowflake worksheet and run it.
-8. **Checks:** `pytest`, `ruff check src test`, `sqlfluff lint queries/`, and
+8. **Checks:** `pytest`, `ruff check faers_ingestion test`, `sqlfluff lint queries/`, and
    `sqlfluff lint models tests analyses` from `dbt/faers_transformations`. For
    CI's dbt job, run `sql/06_create_ci_identity.sql` and add the GitHub secrets
    `SNOWFLAKE_ACCOUNT` and `FAERS_CI_PRIVATE_KEY` (the PEM text of the CI key).
@@ -160,7 +160,7 @@ create a database, a warehouse and one external access integration), Python
 
 ```
 queries/                    business-question SQL, one file per question
-src/faers_ingestion/
+faers_ingestion/
   sprocs/                   in-Snowflake download-and-stage procedure + deploy script
   extract/                  Snowpark Connect session, XML schema, drift check
   load/                     flatten to RAW tables, deleted-cases load
@@ -224,7 +224,7 @@ how the query answers the question and which traps it avoids.
 
 ## Findings
 
-Results as of **2026-09-29**, over reports received 2021Q1–2025Q4, after linked
+Results as of **2026-10-02**, over reports received 2021Q1–2025Q4, after linked
 duplicates are collapsed (see [Data quality decisions](#data-quality-decisions)).
 Each table shows the top of the query's output; run the query for the full list.
 These are counts of *reports*, which reflect reporting behaviour as much as drug
@@ -355,33 +355,38 @@ a known one, "not recovered" is the most common, and 7% are fatal.
 
 ### 7. Drugs with a sustained increase in reporting
 
-Growth is the least-squares slope of quarterly reports over the 20 quarters,
-divided by the average quarterly count (0.10 ≈ +10% of the average per
-quarter), so steady growth ranks above a single spike. *Established* drugs had
-at least 100 reports in 2021. Drugs below that, mostly launched during the
-window, are ranked separately, since their growth is largely the launch itself.
-Only drugs with at least 1,000 reports in the window are ranked.
+Growth is the least-squares slope of quarterly implicated reports over the 20
+quarters, divided by the average quarterly count (0.10 ≈ +10% of the average
+per quarter), so steady growth ranks above a single spike. *Established* drugs
+had at least 100 implicated reports in 2021. Drugs below that, mostly launched
+during the window, are ranked separately, since their growth is largely the
+launch itself. Only drugs with at least 1,000 implicated reports in the window
+are ranked. A drug here is a product name across every active-substance
+spelling it was reported under; otherwise a product whose substance string
+changed mid-window (Kisqali, from "ribociclib" to "ribociclib succinate" in
+2025) shows up as a new entrant.
 
 | Cohort | Product | 2021 | 2025 | Growth / quarter |
 |---|---|---:|---:|---:|
-| Established | Tymlos (abaloparatide) | 223 | 5,981 | 0.204 |
-| Established | Benralizumab | 136 | 2,128 | 0.199 |
-| Established | Acalabrutinib | 162 | 1,864 | 0.163 |
-| Established | Osimertinib | 433 | 3,449 | 0.150 |
-| Established | Orgovyx (relugolix) | 365 | 11,853 | 0.144 |
-| Established | Nubeqa (darolutamide) | 165 | 1,980 | 0.137 |
-| Established | Wegovy (semaglutide) | 483 | 5,894 | 0.129 |
-| Established | Depo-Provera (medroxyprogesterone) | 179 | 2,293 | 0.128 |
-| New | Bimzelx (bimekizumab) | 0 | 8,439 | 0.264 |
-| New | Nemluvio (nemolizumab) | 0 | 7,161 | 0.257 |
+| Established | Tymlos (abaloparatide) | 173 | 5,836 | 0.213 |
+| Established | Benralizumab | 116 | 2,084 | 0.208 |
+| Established | Acalabrutinib | 144 | 1,817 | 0.172 |
+| Established | Osimertinib | 360 | 3,316 | 0.161 |
+| Established | Depo-Provera (medroxyprogesterone) | 131 | 2,104 | 0.147 |
+| Established | Orgovyx (relugolix) | 359 | 11,671 | 0.144 |
+| Established | Dapagliflozin | 674 | 8,860 | 0.137 |
+| Established | Semaglutide | 105 | 1,304 | 0.131 |
+| New | Bimzelx (bimekizumab) | 0 | 8,381 | 0.264 |
+| New | Nemluvio (nemolizumab) | 0 | 6,960 | 0.257 |
 | New | Kisunla (donanemab) | 0 | 1,361 | 0.246 |
-| New | Cobenfy (xanomeline/trospium) | 0 | 1,254 | 0.232 |
-| New | Winrevair (sotatercept) | 0 | 2,046 | 0.229 |
+| New | Cobenfy (xanomeline/trospium) | 0 | 1,247 | 0.232 |
+| New | Winrevair (sotatercept) | 0 | 1,408 | 0.224 |
 
 The established list is mostly recent launches still ramping up (Orgovyx,
-Nubeqa, Wegovy) and oncology drugs moving into wider use. Depo-Provera is the
-exception: a decades-old drug whose reporting grew twelvefold after its
-meningioma association was publicised (see question 10).
+Tymlos), drugs moving into wider use (dapagliflozin, semaglutide) and oncology
+drugs. Depo-Provera is the exception: a decades-old drug whose implicated
+reports grew sixteenfold after its meningioma association was publicised (see
+question 10).
 
 ### 8. Drugs most often meeting the expedited criteria
 
@@ -462,7 +467,7 @@ with each reaction, from the signal mart:
 | Fatal | 181,082 | 253,826 | 4.2% | 5.9% | +0.023 |
 | Recovering / resolving | 241,537 | 307,847 | 5.6% | 7.2% | +0.016 |
 | Recovered / resolved | 551,138 | 572,501 | 12.7% | 13.3% | +0.002 |
-| Unknown | 2,487,678 | 2,400,032 | 57.5% | 55.9% | −0.003 |
+| Unknown | 2,487,678 | 2,400,031 | 57.5% | 55.9% | −0.003 |
 | Not recovered / not resolved | 641,137 | 587,255 | 14.8% | 13.7% | −0.008 |
 | Not reported | 206,661 | 157,205 | 4.8% | 3.7% | −0.020 |
 
