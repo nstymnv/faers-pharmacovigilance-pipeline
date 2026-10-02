@@ -374,19 +374,19 @@ changed mid-window (Kisqali, from "ribociclib" to "ribociclib succinate" in
 | Established | Osimertinib | 360 | 3,316 | 0.161 |
 | Established | Depo-Provera (medroxyprogesterone) | 131 | 2,104 | 0.147 |
 | Established | Orgovyx (relugolix) | 359 | 11,671 | 0.144 |
-| Established | Dapagliflozin | 674 | 8,860 | 0.137 |
-| Established | Semaglutide | 105 | 1,304 | 0.131 |
+| Established | Actemra ACTPen (tocilizumab) | 110 | 1,130 | 0.140 |
+| Established | Breztri (budesonide/formoterol/glycopyrronium) | 142 | 2,738 | 0.140 |
+| New | Acoltremon | 0 | 1,239 | 0.285 |
 | New | Bimzelx (bimekizumab) | 0 | 8,381 | 0.264 |
 | New | Nemluvio (nemolizumab) | 0 | 6,960 | 0.257 |
-| New | Kisunla (donanemab) | 0 | 1,361 | 0.246 |
-| New | Cobenfy (xanomeline/trospium) | 0 | 1,247 | 0.232 |
-| New | Winrevair (sotatercept) | 0 | 1,408 | 0.224 |
+| New | Vyalev (foscarbidopa/foslevodopa) | 0 | 1,336 | 0.254 |
+| New | Opill (norgestrel) | 0 | 933 | 0.251 |
 
 The established list is mostly recent launches still ramping up (Orgovyx,
-Tymlos), drugs moving into wider use (dapagliflozin, semaglutide) and oncology
-drugs. Depo-Provera is the exception: a decades-old drug whose implicated
-reports grew sixteenfold after its meningioma association was publicised (see
-question 10).
+Breztri) and oncology and respiratory drugs moving into wider use
+(acalabrutinib, osimertinib, benralizumab). Depo-Provera is the exception: a
+decades-old drug whose implicated reports grew sixteenfold after its meningioma
+association was publicised (see question 10).
 
 ### 8. Drugs most often meeting the expedited criteria
 
