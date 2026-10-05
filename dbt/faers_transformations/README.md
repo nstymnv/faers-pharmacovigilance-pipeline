@@ -64,7 +64,7 @@ they show up when browsing `MART` directly.
 
 `.github/workflows/ci.yml` runs `dbt build` on the 2020q1 slice for pull
 requests into `main` (and on demand), as the `FAERS_CI` service user
-(`sql/06_create_ci_identity.sql`) with the profile in [`ci/profiles.yml`](ci/profiles.yml).
+(`sql/create_ci_identity.sql`) with the profile in [`ci/profiles.yml`](ci/profiles.yml).
 The `ci` target builds into `CI_STAGING`, `CI_INTERMEDIATE` and `CI_MART`, so it
 never touches the tables above. sqlfluff then lints the project against those
 built tables (`--config ci/.sqlfluff`).

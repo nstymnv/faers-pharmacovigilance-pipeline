@@ -50,13 +50,6 @@ Thumbs.db
 # DATA FILES
 # ==================================================
 
-data/raw/*
-data/processed/*
-
-# Keep folder structure
-!data/raw/.gitignore
-!data/processed/.gitignore
-
 # Common data formats
 *.parquet
 *.orc

@@ -84,8 +84,8 @@ flowchart LR
    commands; all compute is Snowflake's.
 
 **Cost guardrails:** an XSMALL warehouse with 60-second auto-suspend, a
-monthly resource monitor (`sql/04`), and a `faers_quarters` dbt var that
-restricts a dev run to a single quarter.
+monthly resource monitor (`sql/create_resource_monitor.sql`), and a
+`faers_quarters` dbt var that restricts a dev run to a single quarter.
 
 ## Data model
 
@@ -123,10 +123,12 @@ to `CI_STAGING`/`CI_INTERMEDIATE`/`CI_MART`, never the real layers.
 create a database, a warehouse and one external access integration), Python
 3.12, and Docker if you want Airflow.
 
-1. **Bootstrap Snowflake** by running the scripts in [`sql/`](sql/) in order in
-   a worksheet: database, schemas, warehouse, resource monitor, then the stage,
-   network rule, ingestion log and FDA external access integration (01–05).
-   `06` creates the CI identity and is only needed for CI. All are idempotent.
+1. **Bootstrap Snowflake** by running the scripts in [`sql/`](sql/) in this
+   order in a worksheet: `create_database.sql`, `create_schemas.sql`,
+   `create_dwh.sql` (warehouse), `create_resource_monitor.sql`, then
+   `create_stage_and_access.sql` (stage, network rule, ingestion log and FDA
+   external access integration). `create_ci_identity.sql` creates the CI
+   identity and is only needed for CI. All are idempotent.
 2. **Configure** — copy `.env.example` to `.env` and fill in the account, user,
    role and path to a key-pair private key (key-pair auth only).
 3. **Install:**
@@ -153,7 +155,7 @@ create a database, a warehouse and one external access integration), Python
    Snowflake worksheet and run it.
 8. **Checks:** `pytest`, `ruff check faers_ingestion test`, `sqlfluff lint queries/`, and
    `sqlfluff lint models tests analyses` from `dbt/faers_transformations`. For
-   CI's dbt job, run `sql/06_create_ci_identity.sql` and add the GitHub secrets
+   CI's dbt job, run `sql/create_ci_identity.sql` and add the GitHub secrets
    `SNOWFLAKE_ACCOUNT` and `FAERS_CI_PRIVATE_KEY` (the PEM text of the CI key).
 
 ## Repository layout
@@ -172,7 +174,7 @@ dbt/faers_transformations/
   tests/                    cross-model consistency tests
   ci/                       dbt profile and sqlfluff config for CI
 docker/airflow/             Airflow on Docker Compose + the quarterly DAG
-sql/                        one-time Snowflake bootstrap scripts (06 = CI identity)
+sql/                        one-time Snowflake bootstrap scripts
 test/                       pytest tests for the ingestion package
 .github/workflows/ci.yml    lint, tests, dbt build on the dev slice
 ```
@@ -191,23 +193,23 @@ how the query answers the question and which traps it avoids.
 
 | # | Question | Query |
 |---|---|---|
-| | *Context: report volume per year* | [`00_report_volume_by_year.sql`](queries/00_report_volume_by_year.sql) |
+| | *Context: report volume per year* | [`report_volume_by_year.sql`](queries/report_volume_by_year.sql) |
 | | **Unexpected reactions** | |
-| 1 | Which drugs have the highest share of reports meeting the expedited criteria? | [`01_drugs_highest_expedited_share.sql`](queries/01_drugs_highest_expedited_share.sql) |
-| 2 | What adverse reactions are reported in those cases? | [`02_reactions_in_expedited_reports.sql`](queries/02_reactions_in_expedited_reports.sql) |
-| 3 | Which patient groups are most represented among expedited reports? | [`03_patient_groups_in_expedited_reports.sql`](queries/03_patient_groups_in_expedited_reports.sql) |
-| 4 | Do unexpected reactions disproportionately occur in particular demographic groups? | [`04_expedited_rate_by_demographic_group.sql`](queries/04_expedited_rate_by_demographic_group.sql) |
+| 1 | Which drugs have the highest share of reports meeting the expedited criteria? | [`drugs_highest_expedited_share.sql`](queries/drugs_highest_expedited_share.sql) |
+| 2 | What adverse reactions are reported in those cases? | [`reactions_in_expedited_reports.sql`](queries/reactions_in_expedited_reports.sql) |
+| 3 | Which patient groups are most represented among expedited reports? | [`patient_groups_in_expedited_reports.sql`](queries/patient_groups_in_expedited_reports.sql) |
+| 4 | Do unexpected reactions disproportionately occur in particular demographic groups? | [`expedited_rate_by_demographic_group.sql`](queries/expedited_rate_by_demographic_group.sql) |
 | | **Serious reactions** | |
-| 5 | Which drugs have the largest number of serious reactions? | [`05_drugs_most_serious_reports.sql`](queries/05_drugs_most_serious_reports.sql) |
-| 6 | What are the most common outcomes for these reactions? | [`06_outcomes_of_serious_reactions.sql`](queries/06_outcomes_of_serious_reactions.sql) |
+| 5 | Which drugs have the largest number of serious reactions? | [`drugs_most_serious_reports.sql`](queries/drugs_most_serious_reports.sql) |
+| 6 | What are the most common outcomes for these reactions? | [`outcomes_of_serious_reactions.sql`](queries/outcomes_of_serious_reactions.sql) |
 | | **5-year trends** | |
-| 7 | Which drugs show a sustained increase in adverse-event reporting? | [`07_drugs_increasing_reporting.sql`](queries/07_drugs_increasing_reporting.sql) |
-| 8 | Which drugs most frequently meet the expedited-reporting criteria? | [`08_drugs_most_often_expedited.sql`](queries/08_drugs_most_often_expedited.sql) |
-| 9 | What are the most commonly reported adverse reactions? | [`09_most_common_reactions.sql`](queries/09_most_common_reactions.sql) |
-| 10 | Which adverse reactions are becoming more frequently reported? | [`10_reactions_increasing_reporting.sql`](queries/10_reactions_increasing_reporting.sql) |
-| 11 | Which outcome categories are growing? | [`11_outcome_trends.sql`](queries/11_outcome_trends.sql) |
+| 7 | Which drugs show a sustained increase in adverse-event reporting? | [`drugs_increasing_reporting.sql`](queries/drugs_increasing_reporting.sql) |
+| 8 | Which drugs most frequently meet the expedited-reporting criteria? | [`drugs_most_often_expedited.sql`](queries/drugs_most_often_expedited.sql) |
+| 9 | What are the most commonly reported adverse reactions? | [`most_common_reactions.sql`](queries/most_common_reactions.sql) |
+| 10 | Which adverse reactions are becoming more frequently reported? | [`reactions_increasing_reporting.sql`](queries/reactions_increasing_reporting.sql) |
+| 11 | Which outcome categories are growing? | [`outcome_trends.sql`](queries/outcome_trends.sql) |
 | | **Signal detection** | |
-| 12 | Which drug–reaction pairs are reported together far more often than chance predicts? | [`12_disproportionality_signals.sql`](queries/12_disproportionality_signals.sql) |
+| 12 | Which drug–reaction pairs are reported together far more often than chance predicts? | [`disproportionality_signals.sql`](queries/disproportionality_signals.sql) |
 
 **Terms used throughout:**
 
@@ -533,9 +535,9 @@ distort a count if handled naively:
   sender explicitly coding "unknown": merging them overstated that category
   about 500-fold.
 - **Age group is derived where missing.** Senders fill FAERS's age-group field
-  on only 29% of reports but give a numeric age on many more; queries 03 and 04
-  derive the group from the normalised age using the ICH E2B bands, which cuts
-  "not reported" from 71% to 37%.
+  on only 29% of reports but give a numeric age on many more; the queries for
+  questions 3 and 4 derive the group from the normalised age using the ICH E2B
+  bands, which cuts "not reported" from 71% to 37%.
 - **The analysis window is set in receipt quarters.** `receipt_date` is the date
   of a report's *latest* follow-up, so MART also holds a few reports in 2026Q1–Q2.
   Those quarters would look like a collapse at the end of every trend, so the

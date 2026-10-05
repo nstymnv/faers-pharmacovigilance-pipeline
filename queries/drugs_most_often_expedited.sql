@@ -3,7 +3,7 @@
 --
 -- Ranked by the number of expedited reports where the drug was implicated
 -- (suspect or interacting): the volume counterpart of
--- 01_drugs_highest_expedited_share.sql, which ranks by share. Without the role
+-- drugs_highest_expedited_share.sql, which ranks by share. Without the role
 -- filter, drugs that are simply taken by many patients (aspirin, statins,
 -- amlodipine) fill the list on reports they are not suspected in.
 --

@@ -4,7 +4,7 @@
 #
 # Everything secret comes from the environment: SNOWFLAKE_ACCOUNT and
 # FAERS_CI_PRIVATE_KEY (the full PEM text of keys/faers_ci_key.p8). User, role
-# and warehouse are fixed by sql/06_create_ci_identity.sql.
+# and warehouse are fixed by sql/create_ci_identity.sql.
 faers_transformations:
   target: ci
   outputs:

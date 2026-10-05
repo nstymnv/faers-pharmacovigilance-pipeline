@@ -1,7 +1,7 @@
 -- Business question: which adverse reactions are becoming more frequently
 -- reported over the last 5 years?
 --
--- Same method as 07_drugs_increasing_reporting.sql: least-squares slope of the
+-- Same method as drugs_increasing_reporting.sql: least-squares slope of the
 -- quarterly report counts over the 20 quarters, divided by the mean quarterly
 -- count, with empty quarters as zero. Established and new-entrant reactions are
 -- ranked separately; a "new" reaction term usually means a new MedDRA term or a

@@ -12,7 +12,7 @@
 -- Groups below min_reports are left out as too small for a stable rate.
 --
 -- Age group is the reported one, or derived from onset_age_years where missing;
--- see 03_patient_groups_in_expedited_reports.sql.
+-- see patient_groups_in_expedited_reports.sql.
 set window_start = '2021Q1';
 set window_end = '2025Q4';
 set min_reports = 10000;
