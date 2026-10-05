@@ -3,7 +3,7 @@
 -- Answers "which drugs show a sustained increase in reporting" and "which drugs
 -- most frequently meet the expedited criteria". Quarter grain rather than year:
 -- a report has one receipt date and so falls in exactly one quarter, which makes
--- every count here additive, and Power BI can roll quarters up to years itself.
+-- every count here additive and summing quarters gives a year.
 --
 -- Counts are distinct reports, never rows. A report listing a drug 100 times is
 -- one report (models/README.md).

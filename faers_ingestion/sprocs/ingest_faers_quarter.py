@@ -18,6 +18,9 @@ from datetime import UTC, datetime
 import requests
 from stream_inflate import stream_inflate64
 
+# FAERS quarterly archives follow a stable URL pattern, so quarters are addressed
+# directly. The FAERS index page renders its file list client-side, which is why
+# scraping it returned nothing.
 FAERS_ZIP_URL_TEMPLATE = "https://fis.fda.gov/content/Exports/faers_xml_{year}q{quarter}.zip"
 RAW_STAGE = "@extraction.faers_raw"
 INGESTION_LOG_TABLE = "extraction.ingestion_log"

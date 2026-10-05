@@ -1,8 +1,8 @@
 -- Grain: one row per calendar day, plus one unknown member.
 --
 -- Spans whole calendar years around the receipt and transmission dates in
--- fct_report, so the spine follows the analysis window as it moves and a year is
--- never half-covered. Both are keyed against it, and transmission runs later than
+-- fct_report, so the spine matches the analysis window and a year is never
+-- half-covered. Both are keyed against it, and transmission runs later than
 -- receipt: reports in the 2022q4 file were transmitted in January 2023. It is
 -- bounded by fct_report rather than int_reports because quarters outside the
 -- window stay loaded upstream, and a calendar reaching into them would show

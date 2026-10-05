@@ -97,7 +97,7 @@ standardized as (
         case
             when use_stopped_reduced = 1 then 'yes'
             when use_stopped_reduced = 2 then 'no'
-            when use_stopped_reduced = 3 then 'doesn''t Apply'
+            when use_stopped_reduced = 3 then 'doesn''t apply'
         end as use_stopped_reduced,
         source_quarter
     from normalized

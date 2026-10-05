@@ -7,13 +7,6 @@ load_dotenv()
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# FAERS quarterly archives follow a stable URL pattern, so quarters are addressed
-# directly. The FAERS index page renders its file list client-side, which is why
-# scraping it returned nothing.
-FAERS_ZIP_URL_TEMPLATE = "https://fis.fda.gov/content/Exports/faers_xml_{year}q{quarter}.zip"
-FAERS_HOST = "fis.fda.gov"
-YEARS_TO_DOWNLOAD = 5
-
 EXTRACTION_SCHEMA = "extraction"
 RAW_STAGE = f"{EXTRACTION_SCHEMA}.faers_raw"
 CODE_STAGE = f"{EXTRACTION_SCHEMA}.code"
@@ -72,10 +65,6 @@ def build_connection_parameters() -> dict[str, str]:
 
 def quarter_key(year: int, quarter: int) -> str:
     return f"{year}q{quarter}"
-
-
-def faers_zip_url(year: int, quarter: int) -> str:
-    return FAERS_ZIP_URL_TEMPLATE.format(year=year, quarter=quarter)
 
 
 def stage_xml_prefix(year: int, quarter: int) -> str:

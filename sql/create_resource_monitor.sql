@@ -3,7 +3,7 @@
 -- The backfill parses ~30 GB of XML on warehouse compute, so the failure mode
 -- worth protecting against is a runaway or accidentally repeated backfill rather
 -- than day-to-day dbt runs. Raise CREDIT_QUOTA once a real per-quarter cost is
--- measured; see docs/next-steps-plan.md.
+-- measured.
 USE ROLE ACCOUNTADMIN;
 
 CREATE RESOURCE MONITOR IF NOT EXISTS FAERS_RM

@@ -5,9 +5,6 @@ from faers_ingestion import config
 
 def test_quarter_addressing_is_consistent():
     assert config.quarter_key(2021, 3) == "2021q3"
-    assert config.faers_zip_url(2021, 3) == (
-        "https://fis.fda.gov/content/Exports/faers_xml_2021q3.zip"
-    )
     assert config.stage_xml_prefix(2021, 3) == "@extraction.faers_raw/xml/year=2021/quarter=3"
 
 

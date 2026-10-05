@@ -65,9 +65,9 @@ padded from partial precision and are not safe at month grain (see Date quality
 below).
 
 **4. Every dimension has a `'Not reported'` member keyed `-1`,** and facts point
-at it rather than carrying a null foreign key. Without it a Power BI
-relationship silently drops the 16,732 reports with no source country out of
-every country-sliced visual.
+at it rather than carrying a null foreign key. Without it an inner join to
+`dim_country` silently drops the 16,732 reports with no source country out of
+every country breakdown.
 
 ### Surrogate keys
 

@@ -1,7 +1,7 @@
 -- agg_expedited_drug_profile and agg_drug_quarterly_trend compute the same two
 -- counts from the same facts, kept as separate models so the share sits next to
 -- its own denominator. They must agree: if they ever diverge, one of them has
--- picked up a filter or a join the other has not, and two dashboard pages will
+-- picked up a filter or a join the other has not, and the two tables will
 -- quietly disagree about the same drug.
 select
     coalesce(p.drug_key, t.drug_key) as drug_key,
