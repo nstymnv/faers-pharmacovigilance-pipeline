@@ -11,8 +11,8 @@ select
     r.report_id,
     {{ dbt_utils.generate_surrogate_key(['r.reaction']) }} as reaction_key,
     r.outcome,
-    -- The rank behind the most-severe-wins resolution, published so a dashboard
-    -- can sort or threshold on severity without restating the ordering in DAX.
+    -- The rank behind the most-severe-wins resolution, published so a query
+    -- can sort or threshold on severity without restating the ordering.
     {{ faers_outcome_severity('r.outcome') }} as outcome_severity_rank,
     r.outcome = 'fatal' as is_fatal,
     -- Not part of the key: keying on meddra_version kept a re-coded reaction as

@@ -1,4 +1,5 @@
-"""Quarterly FAERS pipeline: stage → load → dbt, one quarter at a time.
+"""
+Quarterly FAERS pipeline: stage → load → dbt, one quarter at a time.
 
     discover_quarters                pending quarters from INGESTION_LOG, capped
       └─ quarter (mapped per quarter)
@@ -73,7 +74,9 @@ def parse_quarter(quarter_key: str) -> tuple[int, int]:
 
 
 def completed_quarters(first: str, today: date) -> list[str]:
-    """Every quarter from `first` up to the last one that has fully ended."""
+    """
+    Every quarter from `first` up to the last one that has fully ended.
+    """
     year, quarter = parse_quarter(first)
     current = (today.year, (today.month - 1) // 3 + 1)
 
@@ -86,7 +89,8 @@ def completed_quarters(first: str, today: date) -> list[str]:
 
 
 def snowflake_environment() -> dict[str, str]:
-    """The SNOWFLAKE_* variables faers_ingestion.config reads, from the Airflow connection.
+    """
+    The SNOWFLAKE_* variables faers_ingestion.config reads, from the Airflow connection.
 
     The connection is the single place credentials live; the ingestion code keeps
     reading environment variables so it runs the same from a shell and from here.
@@ -155,6 +159,13 @@ def snowflake_environment() -> dict[str, str]:
 def faers_quarterly():
     @task
     def discover_quarters(params: dict) -> list[str]:
+        """
+        The quarters this run loads, oldest first.
+
+        Explicitly requested quarters are returned as given. Otherwise every ended
+        quarter from FIRST_QUARTER on whose latest INGESTION_LOG row is not LOADED,
+        capped at max_quarters to keep one run's credit spend bounded.
+        """
         if params["quarters"]:
             logger.info("loading the requested quarters: %s", params["quarters"])
             return params["quarters"]
@@ -187,6 +198,12 @@ def faers_quarterly():
     def quarter(quarter_key: str):
         @task(retries=1, retry_delay=pendulum.duration(minutes=5), max_active_tis_per_dagrun=1)
         def ingest_quarter(quarter_key: str, params: dict) -> None:
+            """
+            Download and stage the quarter by calling the in-Snowflake procedure.
+
+            A quarter FDA has not published yet is skipped rather than failed, so
+            a scheduled run that comes too early leaves it for the next run.
+            """
             year, quarter = parse_quarter(quarter_key)
             hook = SnowflakeHook(snowflake_conn_id=SNOWFLAKE_CONN_ID)
 
@@ -213,6 +230,12 @@ def faers_quarterly():
         # a JVM per load in this container's memory.
         @task(max_active_tis_per_dagrun=1)
         def extract_load(quarter_key: str) -> None:
+            """
+            Load the staged quarter into RAW by running faers_ingestion.main.
+
+            Credentials come from the Airflow connection and the subprocess output
+            is streamed into the task log.
+            """
             # A subprocess rather than an import: Snowpark Connect starts a JVM in
             # the calling process (one per process, never restarted) and its pins
             # conflict with Airflow's, so it lives in its own virtualenv.

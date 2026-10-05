@@ -1,4 +1,5 @@
-"""Regenerate the frozen safetyreport schema from staged XML.
+"""
+Regenerate the frozen safetyreport schema from staged XML.
 
 Run when FAERS adds fields, then review the diff before committing:
 
@@ -17,6 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 def regenerate(year: int, quarter: int) -> None:
+    """
+    Overwrite safetyreport_schema.json with the schema inferred from one quarter.
+
+    Inference can change the types of existing fields, so take only the new
+    fields from the diff and revert the rest.
+    """
     spark = create_spark()
     try:
         inferred = (

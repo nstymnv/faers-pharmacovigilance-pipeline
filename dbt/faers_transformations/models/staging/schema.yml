@@ -158,7 +158,7 @@ models:
           Decoded action taken with the drug in response to the adverse event
           (FAERS actiondrug codes 1-6, per the bundled XML_NTS spec). Was
           previously passed through as a bare integer, which would have put a
-          meaningless "3" on a dashboard where it means "dose increased".
+          meaningless "3" in query results where it means "dose increased".
         data_tests:
           - accepted_values:
               arguments:
@@ -173,13 +173,13 @@ models:
           whether the drug was stopped, which is what the column name suggests
           and what this description previously said. A positive dechallenge is
           a causality signal, so the distinction matters for any attribution
-          analysis. Values: yes, no, "doesn't Apply".
+          analysis. Values: yes, no, "doesn't apply".
         data_tests:
           - accepted_values:
               arguments:
                 # The apostrophe is doubled for SQL, not a typo: dbt's
                 # accepted_values macro quotes each value without escaping it.
-                values: ["yes", "no", "doesn''t Apply"]
+                values: ["yes", "no", "doesn''t apply"]
               config:
                 severity: warn
       - name: source_quarter

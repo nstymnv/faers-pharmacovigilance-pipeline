@@ -3,7 +3,7 @@
 # into main and when started by hand (Actions tab → CI → Run workflow).
 #
 # Secrets for the dbt job: SNOWFLAKE_ACCOUNT, and FAERS_CI_PRIVATE_KEY holding
-# the full PEM text of the FAERS_CI key (sql/06_create_ci_identity.sql).
+# the full PEM text of the FAERS_CI key (sql/create_ci_identity.sql).
 name: CI
 
 on:

@@ -25,7 +25,7 @@ final as (
         custom_reaction_group,
         custom_reaction_group_label,
         -- 'rule' means an explicit mapping rule put this reaction in its group;
-        -- 'fallback' means it landed there by catch-all. A dashboard that groups
+        -- 'fallback' means it landed there by catch-all. A query that groups
         -- reactions without surfacing this presents a guess as a finding.
         custom_reaction_group_basis
     from reactions

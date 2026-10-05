@@ -1,4 +1,5 @@
-"""Extract staged FAERS XML into the Snowflake raw tables.
+"""
+Extract staged FAERS XML into the Snowflake raw tables.
 
 Ingestion (download → stage) happens inside Snowflake via
 extraction.ingest_faers_quarter; this step reads what that procedure staged.
@@ -56,7 +57,9 @@ def parse_quarter(value: str) -> tuple[int, int]:
 
 
 def ingest_quarter(year: int, quarter: int, force: bool) -> None:
-    """Call the in-Snowflake procedure that downloads and stages the quarter."""
+    """
+    Call the in-Snowflake procedure that downloads and stages the quarter.
+    """
     with snowflake.connector.connect(**build_connection_parameters()) as conn:
         result = (
             conn.cursor()
@@ -77,7 +80,8 @@ def record_load(
     started_at: datetime,
     error_message: str | None = None,
 ) -> None:
-    """Log a load attempt next to the procedure's staging rows in INGESTION_LOG.
+    """
+    Log a load attempt next to the procedure's staging rows in INGESTION_LOG.
 
     Staging and loading fail independently: a quarter can be staged and then fail
     to parse. Logging the load separately is what lets the Airflow DAG retry that
@@ -100,6 +104,12 @@ def record_load(
 
 
 def load_quarter(spark, year: int, quarter: int) -> dict[str, int]:
+    """
+    Replace one quarter's rows in every RAW table. Returns rows loaded per table.
+
+    Fails before writing anything when the staged XML no longer fits the frozen
+    schema, or when nothing is staged for the quarter.
+    """
     key = quarter_key(year, quarter)
 
     # Checked before any table is touched: schema drift otherwise surfaces only

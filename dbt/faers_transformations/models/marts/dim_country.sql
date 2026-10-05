@@ -7,8 +7,8 @@
 --
 -- The unknown member is load-bearing here, unlike in the other dimensions:
 -- 16,732 reports in 2020q1 have no source country and 3,776 no occurrence
--- country. Without a row to point at, a Power BI relationship drops those
--- reports out of every country-sliced visual with no indication that it did.
+-- country. Without a row to point at, an inner join to this dimension drops
+-- those reports out of every country breakdown with no indication that it did.
 with mapped as (
 
     select distinct

@@ -26,7 +26,7 @@
 -- entrant with zero reports in the first year.
 --
 -- Report volume across FAERS as a whole fell slightly over the window
--- (00_report_volume_by_year.sql), so growth here is not a tide lifting all drugs.
+-- (report_volume_by_year.sql), so growth here is not a tide lifting all drugs.
 set window_start = '2021Q1';
 set window_end = '2025Q4';
 set min_window_reports = 1000;

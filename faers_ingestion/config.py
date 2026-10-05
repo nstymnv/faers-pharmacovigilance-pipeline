@@ -7,13 +7,6 @@ load_dotenv()
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# FAERS quarterly archives follow a stable URL pattern, so quarters are addressed
-# directly. The FAERS index page renders its file list client-side, which is why
-# scraping it returned nothing.
-FAERS_ZIP_URL_TEMPLATE = "https://fis.fda.gov/content/Exports/faers_xml_{year}q{quarter}.zip"
-FAERS_HOST = "fis.fda.gov"
-YEARS_TO_DOWNLOAD = 5
-
 EXTRACTION_SCHEMA = "extraction"
 RAW_STAGE = f"{EXTRACTION_SCHEMA}.faers_raw"
 CODE_STAGE = f"{EXTRACTION_SCHEMA}.code"
@@ -37,8 +30,12 @@ def require_env(name: str) -> str:
 
 
 def snowflake_private_key_path() -> Path:
-    # A relative path resolves against the repo root rather than the process's cwd,
-    # so the pipeline behaves the same however it is invoked.
+    """
+    The key-pair file from SNOWFLAKE_PRIVATE_KEY_PATH, checked to exist.
+
+    A relative path resolves against the repo root rather than the process's cwd,
+    so the pipeline behaves the same however it is invoked.
+    """
     key_path = Path(require_env("SNOWFLAKE_PRIVATE_KEY_PATH"))
     if not key_path.is_absolute():
         key_path = REPO_ROOT / key_path
@@ -50,7 +47,8 @@ def snowflake_private_key_path() -> Path:
 
 
 def build_connection_parameters() -> dict[str, str]:
-    """Snowflake connection parameters for Snowpark and the Python connector.
+    """
+    Snowflake connection parameters for Snowpark and the Python connector.
 
     The connector reads the key-pair file itself, so no PEM handling is needed here.
     """
@@ -67,10 +65,6 @@ def build_connection_parameters() -> dict[str, str]:
 
 def quarter_key(year: int, quarter: int) -> str:
     return f"{year}q{quarter}"
-
-
-def faers_zip_url(year: int, quarter: int) -> str:
-    return FAERS_ZIP_URL_TEMPLATE.format(year=year, quarter=quarter)
 
 
 def stage_xml_prefix(year: int, quarter: int) -> str:

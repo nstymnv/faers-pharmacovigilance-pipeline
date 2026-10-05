@@ -12,7 +12,8 @@ os.environ.setdefault("SPARK_CONNECT_MODE_ENABLED", "1")
 
 
 def _expose_bundled_pyspark() -> None:
-    """Put the pyspark that ships inside snowpark-connect on the import path.
+    """
+    Put the pyspark that ships inside snowpark-connect on the import path.
 
     snowpark-connect vendors pyspark rather than depending on it, and only adds it
     to sys.path once a session starts. Without this, importing any module that

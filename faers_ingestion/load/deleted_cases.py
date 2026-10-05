@@ -1,4 +1,5 @@
-"""Load the FDA deleted-cases list for one quarter into RAW.DELETED_CASES.
+"""
+Load the FDA deleted-cases list for one quarter into RAW.DELETED_CASES.
 
 FAERS ships a plain-text list of retracted case numbers alongside each quarter's
 XML. A retraction is not limited to earlier quarters — 153 of the 4,489 IDs in the
@@ -27,7 +28,9 @@ create table if not exists {DELETED_CASES_TABLE} (
 
 
 def load_deleted_cases(conn, year: int, quarter: int) -> int:
-    """Replace one quarter's slice of the deleted-case list. Returns rows loaded."""
+    """
+    Replace one quarter's slice of the deleted-case list. Returns rows loaded.
+    """
     key = quarter_key(year, quarter)
     stage_path = f"@{RAW_STAGE}/deleted/year={year}/quarter={quarter}/"
     cursor = conn.cursor()
