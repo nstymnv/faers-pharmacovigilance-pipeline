@@ -15,7 +15,8 @@ def _qualified(table_name: str) -> str:
 
 
 def _is_quarter_partitioned(spark: SparkSession, table_name: str) -> bool:
-    """Whether the existing table can hold a single quarter's rows.
+    """
+    Whether the existing table can hold a single quarter's rows.
 
     Tables written by the pre-Snowflake pipeline have neither the partition column
     nor the newer parser fields, so they are replaced wholesale on first load
@@ -36,7 +37,8 @@ def write_quarter(
     table_name: str,
     quarter_key: str,
 ) -> int:
-    """Replace one quarter's rows in a raw table.
+    """
+    Replace one quarter's rows in a raw table.
 
     Reloading a single quarter used to mean rebuilding all four tables from every
     staged file. Tagging rows with their source quarter and replacing only that

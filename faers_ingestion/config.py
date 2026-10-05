@@ -37,8 +37,12 @@ def require_env(name: str) -> str:
 
 
 def snowflake_private_key_path() -> Path:
-    # A relative path resolves against the repo root rather than the process's cwd,
-    # so the pipeline behaves the same however it is invoked.
+    """
+    The key-pair file from SNOWFLAKE_PRIVATE_KEY_PATH, checked to exist.
+
+    A relative path resolves against the repo root rather than the process's cwd,
+    so the pipeline behaves the same however it is invoked.
+    """
     key_path = Path(require_env("SNOWFLAKE_PRIVATE_KEY_PATH"))
     if not key_path.is_absolute():
         key_path = REPO_ROOT / key_path
@@ -50,7 +54,8 @@ def snowflake_private_key_path() -> Path:
 
 
 def build_connection_parameters() -> dict[str, str]:
-    """Snowflake connection parameters for Snowpark and the Python connector.
+    """
+    Snowflake connection parameters for Snowpark and the Python connector.
 
     The connector reads the key-pair file itself, so no PEM handling is needed here.
     """

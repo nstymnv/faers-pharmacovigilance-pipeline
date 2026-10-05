@@ -1,4 +1,5 @@
-"""The stored procedure's ZIP handling, run locally against a fake session.
+"""
+The stored procedure's ZIP handling, run locally against a fake session.
 
 Only the member selection and staging logic is tested here; the download and the
 INGESTION_LOG writes need Snowflake. Deflate64 members are not covered: Python's

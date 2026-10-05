@@ -1,4 +1,5 @@
-"""Find where a staged quarter no longer fits the frozen safetyreport schema.
+"""
+Find where a staged quarter no longer fits the frozen safetyreport schema.
 
 FAERS changes its XML from time to time. 2021q4 added an element
 (drugrecuractionmeddraversion) and started writing decimals and dotted
@@ -51,7 +52,9 @@ logger = logging.getLogger(__name__)
 
 
 def schema_element_names(data_type: DataType) -> set[str]:
-    """Every field name in a schema, at any depth, including inside arrays."""
+    """
+    Every field name in a schema, at any depth, including inside arrays.
+    """
     if isinstance(data_type, ArrayType):
         return schema_element_names(data_type.elementType)
 
@@ -67,7 +70,9 @@ def schema_element_names(data_type: DataType) -> set[str]:
 
 
 def schema_numeric_fields(data_type: DataType) -> dict[str, type]:
-    """Field name -> numeric type class, for every long or double field at any depth."""
+    """
+    Field name -> numeric type class, for every long or double field at any depth.
+    """
     if isinstance(data_type, ArrayType):
         return schema_numeric_fields(data_type.elementType)
 
@@ -92,7 +97,8 @@ def _create_lines_file_format(cursor) -> None:
 
 
 def unknown_elements(conn, year: int, quarter: int) -> list[str]:
-    """Element names in the quarter's staged XML that the schema does not declare.
+    """
+    Element names in the quarter's staged XML that the schema does not declare.
 
     Runs in Snowflake over the staged files as plain text lines, one pass per
     quarter. Raises FileNotFoundError when the quarter has no staged XML.
@@ -135,7 +141,8 @@ def unknown_elements(conn, year: int, quarter: int) -> list[str]:
 
 
 def mistyped_values(conn, year: int, quarter: int) -> list[str]:
-    """Numeric schema fields whose values in the quarter would not convert.
+    """
+    Numeric schema fields whose values in the quarter would not convert.
 
     Returns one description per field, e.g. "drugseparatedosagenumb (long):
     24 values like '0.5'". Assumes one element per line, which is how FAERS

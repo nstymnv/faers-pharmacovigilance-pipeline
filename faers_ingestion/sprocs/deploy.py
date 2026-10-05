@@ -1,4 +1,5 @@
-"""Deploy the FAERS ingestion stored procedure to Snowflake.
+"""
+Deploy the FAERS ingestion stored procedure to Snowflake.
 
 The handler is uploaded to a stage and referenced with IMPORTS rather than being
 inlined in the CREATE PROCEDURE body, so the Python stays reviewable in git.

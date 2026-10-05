@@ -40,6 +40,12 @@ def extract_demographics(df: DataFrame) -> DataFrame:
 
 
 def extract_drug(df: DataFrame) -> DataFrame:
+    """
+    One row per drug entry in a report, with its last recurrence action.
+
+    A report lists a drug once per dose entry; those entries stay separate rows,
+    told apart by drug_index.
+    """
     # drug_index identifies a drug within its report. It is derived rather than a
     # FAERS field, and it is what keeps two drug entries with identical values
     # from being treated as the same drug further down.

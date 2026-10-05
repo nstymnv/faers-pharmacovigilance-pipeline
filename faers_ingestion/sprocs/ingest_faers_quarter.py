@@ -1,4 +1,5 @@
-"""Stored procedure handler: download one FAERS quarter into the raw stage.
+"""
+Stored procedure handler: download one FAERS quarter into the raw stage.
 
 Runs inside Snowflake with an external access integration for fis.fda.gov. The
 whole quarter is streamed — the ZIP to local scratch, then each XML member out to
@@ -58,7 +59,8 @@ def _log(session, quarter_key, source_url, status, files, size, started_at, erro
 
 
 def _already_succeeded(session, quarter_key: str) -> bool:
-    """Whether the quarter's latest staging attempt succeeded.
+    """
+    Whether the quarter's latest staging attempt succeeded.
 
     An earlier success does not count: a forced re-stage that failed partway
     leaves the stage incomplete, and the quarter has to be staged again. The
@@ -75,6 +77,12 @@ def _already_succeeded(session, quarter_key: str) -> bool:
 
 
 def _download_zip(url: str, destination: str) -> int:
+    """
+    Stream the quarter's ZIP to `destination`. Returns its size in bytes.
+
+    A 404 means FDA has not published the quarter yet; the Airflow DAG matches
+    the "has not published" message to skip the quarter instead of failing.
+    """
     with requests.get(url, stream=True, timeout=REQUEST_TIMEOUT_SECONDS) as response:
         if response.status_code == 404:
             raise FileNotFoundError(f"FDA has not published {url}")
@@ -87,7 +95,8 @@ def _download_zip(url: str, destination: str) -> int:
 
 
 def _extract_deflate64(zip_path: str, info: zipfile.ZipInfo, local_path: str) -> None:
-    """Decompress one Deflate64 member with stream-inflate, a pure-Python inflater.
+    """
+    Decompress one Deflate64 member with stream-inflate, a pure-Python inflater.
 
     zipfile still supplies the directory entry; only the member's compressed bytes
     are read here. The fast C extension for Deflate64 needs an x86 warehouse, and
@@ -124,7 +133,8 @@ def _extract_deflate64(zip_path: str, info: zipfile.ZipInfo, local_path: str) ->
 
 
 def _stage_members(session, zip_path: str, work_dir: str, year: int, quarter: int):
-    """Extract XML and deleted-case members one at a time and PUT each to the stage.
+    """
+    Extract XML and deleted-case members one at a time and PUT each to the stage.
 
     Members are addressed by name rather than via extractall(), which would follow
     whatever paths the archive claims.
@@ -179,6 +189,13 @@ def _stage_members(session, zip_path: str, work_dir: str, year: int, quarter: in
 
 
 def run(session, year: int, quarter: int, force: bool = False) -> dict:
+    """
+    Procedure entry point: download one quarter and stage its XML and deleted-case files.
+
+    Skips a quarter whose latest staging attempt succeeded unless `force` is set.
+    Every attempt is logged to INGESTION_LOG, and the returned dict is what the
+    CALL reports back.
+    """
     quarter_key = _quarter_key(year, quarter)
     source_url = FAERS_ZIP_URL_TEMPLATE.format(year=year, quarter=quarter)
     started_at = datetime.now(UTC)

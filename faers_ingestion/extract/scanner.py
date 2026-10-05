@@ -10,7 +10,8 @@ SCHEMA_FILE = Path(__file__).with_name("safetyreport_schema.json")
 
 @cache
 def safetyreport_schema() -> StructType:
-    """The frozen safetyreport schema.
+    """
+    The frozen safetyreport schema.
 
     Inferring it instead costs a full pass over every XML file before any work
     starts — several minutes per quarter — and makes the result depend on file
@@ -23,6 +24,12 @@ def safetyreport_schema() -> StructType:
 
 
 def extract_data(spark: SparkSession, path: str) -> DataFrame:
+    """
+    Read the staged XML under `path` into one row per safetyreport.
+
+    The result is cached because each raw table is parsed from it in turn; the
+    caller unpersists it once all of them are written.
+    """
     df = (
         spark.read.format("xml")
         .option("rowTag", "safetyreport")
